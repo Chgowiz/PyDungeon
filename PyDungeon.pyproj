@@ -24,6 +24,10 @@
     <Compile Include="dungeon-memory-sim.py" />
     <Compile Include="pydungeon.py" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="cursor15-dungeon-unedited-basic.txt" />
+    <Content Include="cursor15-dungeon-annotated-basic.txt" />
+  </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
        Visual Studio and specify your pre- and post-build commands in

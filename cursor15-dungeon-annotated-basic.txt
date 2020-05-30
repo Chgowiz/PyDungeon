@@ -1,0 +1,277 @@
+# There are doors
+# Monsters follow you once seen!
+# They may offer to leave you alone if at 1 {Player HP}
+
+0 CLR:POKE59468,12
+1 REM DUNGEON COPYRIGHT (C) 1979 BRIAN SAWYER
+2 REM 1310 DOVER HILL ROAD
+3 REM SANTA BARBARA, CA. 93103
+4 :
+5 REM CURSOR #15, NOV/DEC 1979
+6 REM BOX 550, GOLETA, CA. 93017
+7 REM LINES 61000-65000 (C) 1979 CURSOR MAGAZINE
+8 :
+10 REM AS OF 12/29/79
+
+# Set name of program and mag # - run intro 
+
+90 PG$="DUNGEON":NM$="15":GOSUB62000
+
+# Start of program 
+# Maybe screen size related? it was a 40x25 screen
+# RS would be perhaps the row size and cs column size
+# allows for the 2 status at top
+
+100 RS=23:CS=40:SZ=RS*CS:BL=(25-RS)*40:RS=RS-1:CS=CS-1
+# SZ will equal 920
+# BL = 80
+# RS = 22
+# CS = 39
+
+# DG is related to dungeon, perhaps? 
+# it's a 40x25 grid - perhaps screen-paint related
+130 REM TRICK: DG$() STRINGS GO AT END OF MEMORY!
+140 DIMDG$(24):E$="                                        "
+150 FORI=0TO24:DG$(I)=E$+"":NEXTI
+
+# Setting up 2 status bars, perhaps?
+160 ER$="{HOME}{DOWN}                                       {HOME}{DOWN}"
+170 E2$="{HOME}                                       {HOME}"
+
+180 PRINT"{CLEAR}SETTING UP..."
+
+# We are peeking either 154/155 or 32/33
+# so perhaps TS is total size? 
+# AX is some limit
+# 256*128 = 32768 - 920 = 31848
+190 TS=PEEK(QM)+256*PEEK(QM+1)-SZ:AX=32768
+
+# This is setting up the grid! It's poking spaces (32) into the memory locations.
+# So we create an empty grid i memory at the end of memory. TS is the "boundary where 
+# our structure starts. 
+200 FOR I= TS + 40 TO TS + SZ-41:POKEI,32:NEXTI
+
+# HP is easy enough, EX is probably Experience, MG is probably Gold (Monsters Gold)
+# PX-  HG-   Z-   FG-  K1-  E-  S-  W-  ET-  
+210 {Player HP}=50:MG=0:EX=0:PX=0:HG=0:Z=0:FG=0:K1=0:E=0:S=0:W=160:ET=160
+
+# Not sure what is going on here - TM is TI + 3600, but not sure what that is doing.
+220 TI$="000000":TM=TI+3600
+
+# Go build a dungeon?
+230 GOSUB380
+
+# TS is that number from 190, where did BL come from?
+240 TS=TS-BL
+
+# Put the player somewhere? L must be (L)ocation
+
+250 L=INT(RND(1)*SZ+TS):IFPEEK(L)<>160THEN250
+
+# More TM stuff. 
+260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
+
+# == Start of game loop??? 
+# Look for player input
+270 POKEQK,0:POKEQP,255:GOSUB1240
+
+280 {Player HP}={Player HP}-.15-2*SX:IF{Player HP}<0THEN1190
+
+290 Q=VAL(MID$("808182404142000102",A*2-1,2))-41
+300 IF(PEEK(L+Q)=32)AND(SX<>1)THEN270
+310 IFPEEK(L+Q)=127THEN270
+320 POKEL,W:L=L+Q:W=PEEK(L):POKEL,209:GOSUB600:POKEL,209
+330 IFW=135THENGOSUB1200
+340 IFW>=214ANDW<=219THENGOSUB1000
+350 IFE>0THENS=S+1
+360 IFS>1THENGOSUB830
+370 GOTO270
+# == End of game loop
+
+
+
+#setting up the board
+380 PRINT INT((TM-TI)/60);"{LEFT}  {UP}"  #print the countdown
+
+# Width and length of room 
+400 W=INT(RND(1)*9+2):L=INT(RND(1)*9+2)
+# RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
+# so for s&g, let's assume a width of 4, and a length of 6
+
+410 R0=INT(RND(1)*(RS-L-1))+1:C0=INT(RND(1)*(CS-W-1))+1:P=TS+40*R0+C0
+
+
+
+420 IFP+40*L+W>=TS+SZTHEN530
+430 FORN=0TOL+1:FORN1=0TOW+1:IFPEEK(P+(N*40)+N1)<>32THEN530
+440 NEXTN1,N
+450 FORN=1TOL:FORN1=1TOW:POKEP+(N*40)+N1,160:NEXTN1,N
+460 FORN=P+42+(L*40)TOTS+999STEP40
+470 IFPEEK(N)=160THENFORN1=P+42TONSTEP40:POKEN1,160:NEXT:POKEN1-80,102:GOTO490
+480 NEXTN
+490 FORN=P+81+WTOP+121+W:IF(N-TS)/40=INT((N-TS)/40)THEN520
+500 IFPEEK(N)=160THENFORN1=P+81TON-1:POKEN1,160:NEXT:POKEN1-1,102:GOTO520
+510 NEXT
+520 S=INT(RND(1)*L)+1:S1=INT(RND(1)*W+1):POKEP+S1+S*40,INT(RND(1)*6+214)
+530 IFTI<TMTHEN380
+540 FORN=1TO11
+550 U=INT(RND(1)*SZ)+TS:IFPEEK(U)<>160THEN550
+560 POKEU,135:HG=HG+1:NEXT
+570 FORR0=0TORS:POKETS+40*R0,127:POKETS+40*R0+CS,127:NEXTR0
+580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
+590 RETURN
+
+600 K=-40:J=3:M=40:R=3:GN=0
+610 IFSM=1THENK=-80:J=5:M=80:R=4:SM=0
+620 O=L-32767-R
+630 IFO+32811>33768THENM=0
+640 FORN=-40TO40STEP40:FORN1=1TO3:IFN=0ANDN1=2THEN820
+650 Y=O+N+N1:V=PEEK(Y+TS):POKEY+AX,V
+660 IFV<135ORV=160THEN820
+670 V=V-128:IFV<>7THEN710
+680 K1=1+K1+INT((MG+1)*(RND(1)))
+690 GN=GN+1:IFGN>FGTHENGOSUB1410:PRINT"GOLD IS NEAR!":GOSUB1430:FG=HG+1
+700 GOTO820
+710 V1=V+128:S=0:POKEY+TS,160
+720 IFV=86THEN{Monster}="SPIDER":I=3
+730 IFV=87THEN{Monster}="GRUE":I=7
+740 IFV=88THEN{Monster}="DRAGON":I=1
+750 IFV=89THEN{Monster}="SNAKE":I=2
+760 IFV=90THEN{Monster}="NUIBUS":I=9
+770 IFV=91THEN{Monster}="WYVERN":I=5
+780 I=INT(RND(1)*{Player HP}+(PX/I)+{Player HP}/4)
+790 IFE>0THENPOKETS+E,QQ
+800 QQ=V+128:E=Y
+810 GOSUB1410:PRINT"A "{Monster};" WITH";I;"POINTS IS NEAR.":GOSUB1430:{Monster HP}=I
+820 NEXTN1:NEXTN:FG=GN:RETURN
+830 O1=0:A=0:E1=E+AX:IFABS(E1+40-L)<ABS(E1-L)THENA=40
+840 IFABS(E1-40-L)<ABS(E1-L)THENA=-40
+850 IF(PEEK(E+A+TS)=209)OR(PEEK(E+A+TS)>128)THENO1=O1+A
+860 IFABS(E1-1-L)<ABS(E1-L)THENA=-1
+870 IFABS(E1+1-L)<ABS(E1-L)THENA=1
+880 IF(PEEK(E+O1+A+TS)=209)OR(PEEK(E+O1+A+TS)>128)THENO1=O1+A
+890 A=O1:IFE1+A=LTHEN960
+900 IFE1+A<LTHEN940
+910 IFA=41THENA=39
+920 IFA=-39THENA=-41
+930 GOTO960
+940 IFA=31THENA=41
+950 IFA=-41THENA=-39
+960 IFPEEK(E+A+TS)<128THENPOKEE1,V1:RETURN
+970 POKEE1,ET:E=E+A:ET=PEEK(E+AX):POKEE+AX,V1:IFE+AX=LTHENET=160:GOSUB1000
+980 RETURN
+990 QQ=V+128:E=Y
+
+# Monster attacks routine
+1000 GOSUB1410:PRINT"{RVS ON}AN ATTACK!!!":GOSUB1430:PW={Player HP}+EX
+1010 H1=RND(1)*{Monster HP}/2+{Monster HP}/4:CH=RND(1)*PW/2+PW/4:{Monster HP}=INT({Monster HP}-CH):{Player HP}=INT({Player HP}-H1)
+# If Player HP 0 or less, go to death routine
+1020 IF{Player HP}<1THEN1190
+# Monster will negotiate if they are more than 2x higher than player
+
+1030 IF({Monster HP}/({Player HP}+1)<2)THEN1090
+1040 GOSUB1410:PRINT"THE "{Monster}" WILL LEAVE..":GOSUB1430
+1050 GOSUB1410:PRINT"IF YOU GIVE IT HALF YOUR GOLD.":GOSUB1430
+1060 GOSUB1410:PRINT"WILL YOU CONSENT TO THIS (Y OR N) ";
+1070 GOSUB1500
+1080 IFL$="Y"THENMG=MG-MG/2:W=160:E=0:S=0:POKEL,209:RETURN
+# if monster is still alive.
+1090 IF{Monster HP}>1THEN1160
+1100 GOSUB1410:W=160:S=0:E=0:POKEL,209:PRINT"THE "{Monster}" IS DEAD!":GOSUB1430
+1110 EX=EX+I:Z=Z+1
+1120 IFEX<PX*2THEN1180
+1130 PX=EX:{Player HP}={Player HP}*3
+1140 GOSUB1410:PRINT"YOUR HIT PTS. HAVE BEEN RAISED.":GOSUB1430
+1150 GOTO1180
+# SUB monster is still alive!
+1160 GOSUB1410:PRINT"THE "{Monster}" HAS"{Monster HP}"HIT POINTS":GOSUB1430
+1170 GOSUB1340
+1180 RETURN
+# SUB Death routine - display final status 
+1190 GOSUB1410:PRINT"YOU'RE DEAD!":GOSUB1430:GOTO1350
+# Display how much gold found - not sure what is going on here.
+1200 MG=MG+K1:GOSUB1410:PRINT"YOU FOUND"K1"GOLD PIECES!":GOSUB1430
+
+
+
+# Probably changing the player icon to something like a filled in space?
+1210 POKEL-AX+TS,160:W=160
+1220 HG=HG-1:IFHG>0THENRETURN
+1230 GOTO1350
+
+# == GAME LOOP == ??
+
+1240 IFIU=0THENGOSUB1430
+
+
+# Player move - get input and evaluate. 
+1250 GOSUB1340
+1260 IFIUTHENIFTI>TMTHENGOSUB1410:PRINT"YOU MAY MOVE."
+1270 GETL$:IFL$=""THEN1260
+1280 A=ASC(L$):SX=ABS(A>127):A=AAND127
+
+# If waiting in place regain {Player HP}
+1290 IFA=ASC("5")THEN{Player HP}={Player HP}+1+SQR(EX/{Player HP})
+
+# player can move on keypad in any direction. A holds the value of their move
+1300 IFA>48ANDA<58THENA=A-48:TM=0:GOSUB1410:RETURN
+
+# not sure what "S" does but it reduces {Player HP}!
+1310 IFL$="S"THENSM=1:{Player HP}={Player HP}-2 
+
+#quit
+1320 IFL$="Q"THEN1350
+1330 GOTO1250
+
+# Sub Refresh status line 1
+1340 PRINTE2$;"HIT PTS.";INT({Player HP}+.5);"{LEFT}  EXP.";EX;"{LEFT}  GOLD";MG;"   ":RETURN
+
+# Sub display game totals
+1350 GOSUB1410:PRINTE2$;"GOLD:";MG;" EXP:";EX;" KILLED";Z;"BEASTS"
+
+# This routine displays the map and asks if player wants to go again
+1360 FORN=BLTOSZ-1+BL:A=PEEK(TS+N):POKEAX+N,A:NEXT
+1375 GETL$:IFL$<>""THEN1375
+1380 GOSUB1410:PRINT"WANT TO PLAY AGAIN";
+1390 GOSUB1500:IFL$<>"N"THEN180
+1400 TM=0:GOSUB1410:PRINT"{UP}";:END
+
+# Some sort of delay, perhaps?
+1410 IF IU THEN IF TI<TM THEN 1410
+1420 PRINTER$;:IU=0:RETURN
+
+# SUB - not sure yet.
+1430 TM=TI+3*60:IU=1:RETURN
+1440 IFPEEK(32768)=0THENSTOP
+1450 RETURN
+
+
+1500 ZT=0:ZC=1
+1510 GETL$:IFL$<>""THEN1550
+1520 IFTI>ZTTHENPRINTMID$("? ",ZC,1);"{LEFT}";:ZT=TI+30:ZC=3-ZC
+1530 GOTO1510
+1550 PRINT"? ";L$:RETURN
+
+# SUB - Clear screen - reset all variables - Start game (goto 100)
+60300 PRINT"{CLEAR}":CLR:GOSUB60400:GOTO100
+
+# SUB - not sure what this is doing. It affects QK, QM, QP
+# -- These are poke values. 
+# -- I think it's related to which ROM/Basic I have. Might not be important for the game logic.
+# 134 = 0x86, 52 = 0x34
+60400 QK=525:QM=134:QP=515:CR$=CHR$(13)
+60410 IFPEEK(50000)=0THENRETURN
+60420 QK=158:QM=52:QP=151   #Basic 2/4 pointer - limit of memory
+60430 RETURN
+
+# SUB print 40 "lines" (CHR$(192) apparently)
+60500 FORI=1TO10:PRINT"{192}{192}{192}{192}";:NEXTI:RETURN
+
+# SUB - Print intro
+62000 PRINT"{CLEAR}{DOWN}{DOWN}";TAB(9);"CURSOR #";NM$;"  ";PG$
+62010 PRINT"{DOWN} COPYRIGHT (C) 1979  BY BRIAN SAWYER{DOWN}"
+62020 GOSUB60500  # Print a line across the screen
+62030 PRINT"{DOWN}SEARCH FOR GOLD IN THE ANCIENT RUINS"
+62080 PRINT"{DOWN}{DOWN}{DOWN}PRESS {RVS ON}RETURN{RVS OFF} TO BEGIN"
+62090 GETT$:IFT$=""THEN62090
+62100 GOTO60300
