@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>b6894364-5405-4815-a74f-0a5336597418</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>dungeon-memory-sim.py</StartupFile>
+    <StartupFile>pydungeon.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

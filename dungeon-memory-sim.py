@@ -90,7 +90,11 @@ def gen_room_loc(TS):
 
 
 def gen_dungeon(TS, SZ):
-    # We return a map of 40x25 (x,y)
+    # We return a list data structure that represents a map of 40 columns, 
+    # 25 rows. The dungeon is generated inside this structure and serves
+    # to feed what will be seen on the screen. In a sense, we'll have two 
+    # structures - the full map, and then the map that the player reveals 
+    # and what gets painted to the screen.
     mem = []
     mem = init_memory()
 
