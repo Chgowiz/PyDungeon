@@ -1,65 +1,161 @@
-# There are doors
-# Monsters follow you once seen!
-# They may offer to leave you alone if at 1 {Player HP}
+Variable settings and code run
+# $8000 = 32768 = start of screen memory - $8400 acts like $8000 on 40 col machine
 
-0 CLR:POKE59468,12
-1 REM DUNGEON COPYRIGHT (C) 1979 BRIAN SAWYER
-2 REM 1310 DOVER HILL ROAD
-3 REM SANTA BARBARA, CA. 93103
-4 :
-5 REM CURSOR #15, NOV/DEC 1979
-6 REM BOX 550, GOLETA, CA. 93017
-7 REM LINES 61000-65000 (C) 1979 CURSOR MAGAZINE
-8 :
-10 REM AS OF 12/29/79
+0
+POKE59468,12 		# set computer into graphics mode
 
-# Set name of program and mag # - run intro 
+90
+PG$="DUNGEON"		# display related - program name for std CURSOR display
+NM$="15"			# display related - Cursor issue #
+GOSUB 62000
 
-90 PG$="DUNGEON":NM$="15":GOSUB62000
+==> 62000 		# Print mag info 
+GOSUB 60500
 
-# Start of program 
-# Maybe screen size related? it was a 40x25 screen
-# RS would be perhaps the row size and cs column size
-# allows for the 2 status at top
+==> 60500 				# print a line of 40 graphic chars (CHR$192)
 
-100 RS=23:CS=40:SZ=RS*CS:BL=(25-RS)*40:RS=RS-1:CS=CS-1
-# SZ will equal 920
-# BL = 80
-# RS = 22
-# CS = 39
+return TO 62030
 
-# DG is related to dungeon, perhaps? 
-# it's a 40x25 grid - perhaps screen-paint related
+==> 62030
+"Press return to begin!"
+
+goto 60300
+++> 60300
+CLR					# Clear all variables
+
+GOSUB 60400
+
+==> 60400
+QK = 525
+QM = 134
+QP = 515
+CR$ = CHR$(13) 		# Set up carriage return
+IF PEEK(50000) = 0  # This is 0xC350. To see if this is where BASIC lives or not?
+  THEN RETURN (back to 60300) (with qk/qm/qp as-is)
+$ QK = 158
+$ QM = 52
+$ QP = 151
+RETURN (back to 60300)
+
+==> back at 60300
+goto 100 			# What happens to the original gosub back in line 90?
+
+++> 100
+100 RS=23: CS=40: SZ=RS*CS: BL=(25-RS)*40:RS=RS-1:CS=CS-1
+$ SZ will equal 920
+$ BL = 80
+$ RS = 22
+$ CS = 39
+
 130 REM TRICK: DG$() STRINGS GO AT END OF MEMORY!
 140 DIMDG$(24):E$="                                        "
 150 FORI=0TO24:DG$(I)=E$+"":NEXTI
-
 # Setting up 2 status bars, perhaps?
 160 ER$="{HOME}{DOWN}                                       {HOME}{DOWN}"
 170 E2$="{HOME}                                       {HOME}"
 
 180 PRINT"{CLEAR}SETTING UP..."
 
-# We are peeking either 154/155 or 32/33
-# so perhaps TS is total size? 
-# AX is some limit
-# 256*128 = 32768 - 920 = 31848
+# AX is assumed screen ram location
+# This seems to look at the point for "Top of memory" which is also
+# where screen ram starts, then backs off 920.
+# running this on emulator gives me 31848
 190 TS=PEEK(QM)+256*PEEK(QM+1)-SZ:AX=32768
+190 TS=PEEK(52)+256*PEEK(52+1)-920:AX=32768
+$ TS = 31848
 
-# This is setting up the grid! It's poking spaces (32) into the memory locations.
-# So we create an empty grid i memory at the end of memory. TS is the "boundary where 
-# our structure starts. 
 200 FOR I= TS + 40 TO TS + SZ-41:POKEI,32:NEXTI
+200 FOR I= 31848 + 40 TO 31848 + 920 - 41:POKEI,32:NEXTI
+# Putting spaces into this memory - perhaps to clear the in-mem map?
 
-# HP is easy enough, EX is probably Experience, MG is probably Gold (Monsters Gold)
-# PX-  HG-   Z-   FG-  K1-  E-  S-  W-  ET-  
-210 {Player HP}=50:MG=0:EX=0:PX=0:HG=0:Z=0:FG=0:K1=0:E=0:S=0:W=160:ET=160
+210 HP=50:MG=0:EX=0:PX=0:HG=0:Z=0:FG=0:K1=0:E=0:S=0:W=160:ET=160
+# HP is player hit points
+# MG is gold recovered
+# EX is experience earned
+# HG is hidden gold (max of 12)
+# rest are to be determined
 
-# Not sure what is going on here - TM is TI + 3600, but not sure what that is doing.
-220 TI$="000000":TM=TI+3600
+220 TI$="000000":TM=TI+3600		# This is related to timer and how 
+								# things were mapped to the screen. Perhaps
+								# this was done to reduce flickering?
+								# TI was a magic number that gave number of "jiffies"
 
-# Go build a dungeon?
-230 GOSUB380
+$ TM is going to be some magic number + 3600
+
+230 GOSUB 380
+
+==>380
+# Seems to generate the dungeon...
+380 PRINT INT((TM-TI)/60);"{LEFT}  {UP}"  #print the countdown
+380 PRINT INT((3600-TI/60) 				  # Counts down a minute
+
+400 W=INT(RND(1)*9+2):L=INT(RND(1)*9+2)
+# RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
+$ W = 6 (cols)
+$ L = 4 (rows)
+
+410 R0=INT(RND(1)*(RS-L-1))+1:C0=INT(RND(1)*(CS-W-1))+1:P=TS+40*R0+C0
+# RS is 22, CS is 39
+# example R0 = 11, C0 = 15, P=31848+40*R0+C0
+$ R0 = 11
+$ C0 = 15
+$ P = 32303
+
+
+420 IFP+40*L+W>=TS+SZTHEN530
+420 IF 32303+40*4+6 >= TS+SZ THEN (GOTO) 530	# If room size will take us beyond map limit
+												# GOTO 530
+
+530 IFTI<TMTHEN380 								# This checks to see if we've run out of time
+												# to build the dungeon. So the computer will keep 
+												# building until the countdown is over!
+												# otherwise it continues on to 540... but we'll get to
+												# that in a bit
+
+430 FORN=0TOL+1:FORN1=0TOW+1:IFPEEK(P+(N*40)+N1)<>32THEN530
+# This checks to see if this space is taken up. If it is, then we goto 530... which will continue building
+# if we have enoght time
+440 NEXTN1,N
+
+450 FORN=1TOL:FORN1=1TOW:POKEP+(N*40)+N1,160:NEXTN1,N
+# This puts char160, which is a filled in solid block into the room area.
+
+# Generate vertical passages from generated room down.
+460 FORN=P+42+(L*40)TOTS+999STEP40
+# FOR N = (P=start of room in memory) + 42 + (Length*40) to (TS = 31848)+999=32847 - Step every 40
+#
+470 IFPEEK(N)=160THENFORN1=P+42TONSTEP40:POKEN1,160:NEXT:POKEN1-80,102:GOTO490
+480 NEXTN
+
+# Generate horizontal passages from generate room right.
+490 FORN=P+81+WTOP+121+W:IF(N-TS)/40=INT((N-TS)/40)THEN520
+500 IFPEEK(N)=160THENFORN1=P+81TON-1:POKEN1,160:NEXT:POKEN1-1,102:GOTO520
+510 NEXT
+
+# Generate a monster in the room. Every room has a monster, huh?
+520 S=INT(RND(1)*L)+1:S1=INT(RND(1)*W+1):POKEP+S1+S*40,INT(RND(1)*6+214)
+
+# Timer check
+530 IFTI<TMTHEN380
+
+# Generate gold
+540 FORN=1TO11
+550 U=INT(RND(1)*SZ)+TS:IFPEEK(U)<>160THEN550
+560 POKEU,135:HG=HG+1:NEXT
+
+# Generate borders (I think)
+570 FORR0=0TORS:POKETS+40*R0,127:POKETS+40*R0+CS,127:NEXTR0
+580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
+590 RETURN
+
+
+
+
+
+
+240 TS = TS - BL
+240 31848 = 31848 - 80 
+$ TS = 31768
 
 # TS is that number from 190, where did BL come from?
 240 TS=TS-BL
@@ -90,36 +186,7 @@
 
 
 
-#setting up the board
-380 PRINT INT((TM-TI)/60);"{LEFT}  {UP}"  #print the countdown
 
-# Width and length of room 
-400 W=INT(RND(1)*9+2):L=INT(RND(1)*9+2)
-# RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
-# so for s&g, let's assume a width of 4, and a length of 6
-
-410 R0=INT(RND(1)*(RS-L-1))+1:C0=INT(RND(1)*(CS-W-1))+1:P=TS+40*R0+C0
-
-
-
-420 IFP+40*L+W>=TS+SZTHEN530
-430 FORN=0TOL+1:FORN1=0TOW+1:IFPEEK(P+(N*40)+N1)<>32THEN530
-440 NEXTN1,N
-450 FORN=1TOL:FORN1=1TOW:POKEP+(N*40)+N1,160:NEXTN1,N
-460 FORN=P+42+(L*40)TOTS+999STEP40
-470 IFPEEK(N)=160THENFORN1=P+42TONSTEP40:POKEN1,160:NEXT:POKEN1-80,102:GOTO490
-480 NEXTN
-490 FORN=P+81+WTOP+121+W:IF(N-TS)/40=INT((N-TS)/40)THEN520
-500 IFPEEK(N)=160THENFORN1=P+81TON-1:POKEN1,160:NEXT:POKEN1-1,102:GOTO520
-510 NEXT
-520 S=INT(RND(1)*L)+1:S1=INT(RND(1)*W+1):POKEP+S1+S*40,INT(RND(1)*6+214)
-530 IFTI<TMTHEN380
-540 FORN=1TO11
-550 U=INT(RND(1)*SZ)+TS:IFPEEK(U)<>160THEN550
-560 POKEU,135:HG=HG+1:NEXT
-570 FORR0=0TORS:POKETS+40*R0,127:POKETS+40*R0+CS,127:NEXTR0
-580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
-590 RETURN
 
 600 K=-40:J=3:M=40:R=3:GN=0
 610 IFSM=1THENK=-80:J=5:M=80:R=4:SM=0
