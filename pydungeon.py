@@ -67,13 +67,13 @@ def PEEK(memory, location):
     return memory[(location//WIDTH)][(location%WIDTH)]
 
 
-def gen_room_loc(TS):
+def gen_room_loc(RS, CS):
     W = int(random()*9+2); L = int(random()*9+2)
-    R0=int(random()*(RS-L-1))+1; C0=int(random()*(CS-W-1))+1; P=TS+40*R0+C0
+    R0=int(random()*(RS-L-1))+1; C0=int(random()*(CS-W-1))+1; P=40*R0+C0
     return W, L, R0, C0, P
 
 
-def gen_dungeon(TS, SZ):
+def gen_dungeon(SZ, RS, CS):
     # We return a list data structure that represents a map of 40 columns, 
     # 25 rows. The dungeon is generated inside this structure and serves
     # to feed what will be seen on the screen. In a sense, we'll have two 
@@ -89,11 +89,11 @@ def gen_dungeon(TS, SZ):
     # Keep generating rooms until we've hit a limit of DESIRED_RMS rooms or we've maxed out with 
     # retries of so many times (RM_GEN_RETRIES) . 
     while rooms_generated < DESIRED_RMS and retries < RM_GEN_RETRIES:
-        W, L, R0, C0, P = gen_room_loc(TS)
+        W, L, R0, C0, P = gen_room_loc(RS, CS)
 
         # This was a check to see if the room in the data structure would go over
         # the boundaries (end point) of the area of memory allocated. (TS+SZ)
-        if P+40*L+W >= TS+SZ:
+        if P+40*L+W >= SZ:
             fail_on_size += 1
             continue
 
@@ -121,7 +121,7 @@ def gen_dungeon(TS, SZ):
                     POKE(mem, P+(N*40+N1), FLOOR)
 
             # Generate vertical passages from generated room down.
-            for N in range(P+42+(L*40), TS+999+1, 40):
+            for N in range(P+42+(L*40), 999+1, 40):
                 if PEEK(mem,N) == FLOOR:
                     for N1 in range(P+42, N+1, 40):
                         POKE(mem, N1, FLOOR)
@@ -135,7 +135,7 @@ def gen_dungeon(TS, SZ):
             # Generate horizontal passages from generated room right.
             start = P+81+W; end = P+121+W 
             for N in range(start, end+1):
-                if (N-TS)/40 == int((N-TS)/40):
+                if N/40 == int(N/40):
                     break
                 
                 if PEEK(mem, N) == FLOOR:
@@ -152,20 +152,60 @@ def gen_dungeon(TS, SZ):
     for N in range(1, NUM_HIDDEN_GOLD+1):
         is_room = False
         while not is_room:
-            U = int(random()*SZ)+TS
+            U = int(random()*SZ)
             is_room = (PEEK(mem,U) == FLOOR)
         POKE(mem, U, GOLD)
 
     # Generate hard borders - player cannot cross these.
     for R0 in range(0,RS+1):
-        POKE(mem, TS+40*R0, BORDER)
-        POKE(mem, TS+40*R0+CS, BORDER)
+        POKE(mem, 40*R0, BORDER)
+        POKE(mem, 40*R0+CS, BORDER)
 
     for C0 in range(0, CS+1):
-        POKE(mem, TS+C0, BORDER)
-        POKE(mem, TS+C0+40*RS, BORDER)
+        POKE(mem, C0, BORDER)
+        POKE(mem, C0+40*RS, BORDER)
 
     return mem
+
+def what_is_seen(dungeon_map, players_map, L, SM, MG, K1):
+
+    ## BUG ## - the view "wraps" if we're right next to the border. The border needs
+    # to stop the view
+
+    if SM==1:
+        K=80; J=-2; R=3; SM=0
+    else:
+        K=40; J=-1; R=2
+
+    for N in range(K*-1, K+1, 40):    # col position - left, center, right
+        for N1 in range(J,R):       # row position - above, center, below
+            if N==0 and N1==0:      # if we're looking at our curr position...
+                continue            # ... then ignore. We know what's here!
+            Y=L+N+N1
+            V=PEEK(dungeon_map, Y)
+            POKE(players_map, Y, V)
+            if V==DOOR or V==FLOOR or V==BORDER:
+                continue
+            if V==GOLD:
+                K1=1+K1+int((MG+1)*(random()))  # We found gold! How much?
+                                                # See notes on source ln 680
+                continue
+            if V in MONSTERS:
+                continue
+    #710 V1=V+128:S=0:POKEY+TS,160
+    #720 IFV=86THENE$="SPIDER":I=3
+    #730 IFV=87THENE$="GRUE":I=7
+    #740 IFV=88THENE$="DRAGON":I=1
+    #750 IFV=89THENE$="SNAKE":I=2
+    #760 IFV=90THENE$="NUIBUS":I=9
+    #770 IFV=91THENE$="WYVERN":I=5
+    #780 I=INT(RND(1)*HP+(PX/I)+HP/4)
+    #790 IFE>0THENPOKETS+E,QQ
+    #800 QQ=V+128:E=Y
+    #810 GOSUB1410:PRINT"A "E$;" WITH";I;"POINTS IS NEAR.":GOSUB1430:CC=I
+    #820 NEXTN1:NEXTN:FG=GN:RETURN
+    
+    return K1, SM
 
 def display_dungeon_map(map, final=False):
     cls()
@@ -188,9 +228,6 @@ def end_game(MG, EX, Z, end_message):
     print(end_message)
     print("Gold: {} Exp: {} Killed {} Beasts".format(MG, EX, Z))
     input("Press return to see the dungeon map. ")
-    # Display the dungeon map
-    display_dungeon_map(dungeon_map, True)
-
 
 # Display welcome
 display_welcome()
@@ -207,15 +244,11 @@ while True:
     # where the program could generate an in-memory map (TS) and then AX was the
     # point where PET screen memory began. POKEing to locations at AX and beyond
     # would write to the screen!
-    # We're setting TS to 0 here, since it really doesn't matter what the 'memory
-    # location' is. In the original code, TS was AX - 920 (row*col = 920). 
-    # We'll set AX to TS + 920.
+    # We don't really need TS or AX in this program, so I've done away with them.
     RS=23; CS=40; SZ=RS*CS; BL=(25-RS)*40 ; RS=RS-1; CS=CS-1
-    TS = 0
-    AX = TS + 920
 
     # Dungeon Map is the generated map
-    dungeon_map = gen_dungeon(TS, SZ)
+    dungeon_map = gen_dungeon(SZ, RS, CS)
 
     # Player Map is what is displayed to the player as they navigate the dungeon
     player_map = init_map()
@@ -225,18 +258,21 @@ while True:
     # HG is hidden gold; Z is number of monsters killed; SX is "shift mode" to move
     # thru walls [not sure how I'm going to implement that yet...]; W is what was in
     # the space that the player just moved thru; K1 is how much gold has been uncovered; 
-    # FG is found gold (revealed on map); 
-    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD; Z=0; SX=0; W=FLOOR; K1=0; FG=0; 
+    # SM is "see mode" - look further. Not well or completely implemented by Brian.
+
+    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD; Z=0; SX=0; W=FLOOR; K1=0; 
+    SM=0
 
     good_location = False
     while not good_location:
-        L = int(random()*SZ+TS)
+        L = int(random()*SZ)
         good_location = (PEEK(dungeon_map, L) == FLOOR)
+    
     # 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
     W = PEEK(dungeon_map, L)
 
-    # Determine/paint what is visible # GOSUB 600
-    ### TODO ###
+    # Determine/display what is visible
+    K1, SM = what_is_seen(dungeon_map, player_map, L, SM, MG, K1)
 
     POKE(player_map, L, PLAYER)
     W = FLOOR
@@ -265,8 +301,11 @@ while True:
                 pass
             elif move == "5":     # Rest/recover HP
                 HP += 1+sqrt(EX/HP)
-            elif move == "s":     # suicide/sm or move thru walls mode?
+                map_move = True
+            elif move == "s":     # See more mode
                 SM = 1; HP -= 2
+                map_move = True   # Force a map move/screen refresh
+                move = 5          # but make it a "stay put" move.
             elif move == "q":     # Quit game
                 playing = False
                 break
@@ -289,33 +328,36 @@ while True:
         # See annotated source for how Q works, but it essentially 
         # converts the player direction input into the number of 
         # grid spaces (assume 40c x 25r screen) to move the player.
-        Q = MOVEMAP[move]-41
-        if (PEEK(dungeon_map,L+Q)==" " and SX!=1) or \
-            (PEEK(dungeon_map,L+Q)==BORDER):
-            continue
-        else:
-            POKE(player_map,L,W)
-            L=L+Q
-            W = PEEK(dungeon_map,L)
-            POKE(player_map,L,PLAYER)
+        if map_move: 
+            Q = MOVEMAP[move]-41
+            if (PEEK(dungeon_map,L+Q)==" " and SX!=1) or \
+                (PEEK(dungeon_map,L+Q)==BORDER):
+                continue
+            else:
+                POKE(player_map,L,W)
+                L=L+Q
+                W = PEEK(dungeon_map,L)
+                POKE(player_map,L,PLAYER)
 
-            # Determine/paint what is visible # GOSUB 600
-            ### TODO ###
+                K1, SM = what_is_seen(dungeon_map, player_map, L, SM, MG, K1)
 
-            if W == GOLD:
-                MG=MG+K1
-                print("You found {} gold pieces!".format(K1))
-                POKE(dungeon_map, L, FLOOR)
-                W = FLOOR
-                HG -= 1
-                if HG == 0:
-                    playing = False
-                    break
+                if W == GOLD:
+                    MG=MG+K1
+                    print("You found {} gold pieces!".format(K1))
+                    POKE(dungeon_map, L, FLOOR)
+                    W = FLOOR
+                    HG -= 1
+                    if HG == 0:
+                        playing = False
+                        break
 
     if HP <= 0:
         end_game(MG,EX,Z,"You're dead!")
     if HG == 0:
         end_game(MG,EX,Z,"You found all the gold! You won!")
+
+    # Display the dungeon map
+    display_dungeon_map(dungeon_map, True)
 
     print("Want to play again? ", end="")
     if not input().lower().startswith("y"):
