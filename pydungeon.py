@@ -5,6 +5,7 @@ from random import random, randint, choice
 import sys
 from os import system, name
 from time import sleep
+from math import sqrt
 
 WIDTH = 40
 HEIGHT = 25
@@ -16,6 +17,9 @@ DOOR = "+"
 GOLD = "g"
 NUM_HIDDEN_GOLD = 11
 BORDER = "*"
+PLAYER = "@"
+VALIDMOVES = "qs123456789"
+MOVEMAP = [41,80,81,82,40,41,42,0,1,2]
 
 def cls():
     if name == "nt":
@@ -25,7 +29,7 @@ def cls():
 
 def display_welcome():
     cls()
-    print("    PyDungeon\n    A recreation of CURSOR #15 DUNGEON")
+    print("          PyDungeon\n    A recreation of CURSOR #15 DUNGEON")
     print("Original (C)1979 by Brian Sawyer.\nPyDungeon is public domain.")
     print("-" * 40)
     print("Search for GOLD in the ancient ruins\n")
@@ -39,7 +43,7 @@ def init_map():
     for row in range(HEIGHT):
         map_struct.append([])
         for col in range(WIDTH):
-            map_struct[row].append("~")
+            map_struct[row].append(" ")
 
     return map_struct
 
@@ -79,9 +83,6 @@ def gen_dungeon(TS, SZ):
     # original source, I've removed that from this code. 
     mem = []
     mem = init_map()
-
-    for i in range(TS+40, (TS+SZ-41)+1):
-        POKE(mem, i, " ")
 
     retries = 0
     rooms_generated = 0
@@ -166,10 +167,22 @@ def gen_dungeon(TS, SZ):
 
     return mem
 
-def display_dungeon_map(map):
+def display_dungeon_map(map, final=False):
+    cls()
     for row in map[:-2]:
         print("".join(row))
-        sleep(.5)
+        if final:
+            sleep(.5)
+
+def get_player_input(HP, EX, MG):
+    print("HIT PTS. {}  EXP. {}  GOLD {}".format(int(HP+.5), EX, MG))
+    print("You may move. ", end="")
+
+    move = input().lower().strip()
+    if len(move) > 1 or move not in VALIDMOVES:
+        move = ""
+    return move
+
 
 # Display welcome
 display_welcome()
@@ -200,12 +213,93 @@ while True:
     player_map = init_map()
 
     # HP is player hit points; MG is gold recovered; EX is experience earned
-    # HG is hidden gold
-    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD
+    # HG is hidden gold; Z is number of monsters killed; SX is "shift mode" to move
+    # thru walls [not sure how I'm going to implement that yet...]; W is what was in
+    # the space that the player just moved thru.
+    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD; Z=0; SX=0; W=FLOOR
+
+    good_location = False
+    while not good_location:
+        L = int(random()*SZ+TS)
+        good_location = (PEEK(dungeon_map, L) == FLOOR)
+    # 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
+    W = PEEK(dungeon_map, L)
+
+    # Determine/paint what is visible # GOSUB 600
+    ### TODO ###
+
+    POKE(player_map, L, PLAYER)
+    W = FLOOR
+
+    # Input/Move loop
+    # This is not set up like DUNGEON!
+    # Since (right now), Python doesn't accept keystrokes and respond to them
+    # immediately - it requires a return for input (I'm going to look into curses!)
+    # So the input/play loop is a little different. 
+    # I'm also not limiting input to 1 per second. 
+    playing = True
+    while playing:
+        map_move = False
+        # Eligible moves are 1-9 for directions
+        # except 5, which is a "wait" (and heal!)
+        # S which is --notsure-- and q which is quit.
+        # so if 5 or S, update HP, continue to get input.
+        # if q, then break out of this while and stop playing. 
+        # if invalid input (""), continue to get input till valid.
+        # Otherwise, continue on to calculate the results of the move
+        while not map_move:
+            display_dungeon_map(player_map)
+            move = get_player_input(HP, EX, MG)
+
+            if move == "":
+                pass
+            elif move == "5":     # Rest/recover HP
+                HP += 1+sqrt(EX/HP)
+            elif move == "s":     # suicide/sm or move thru walls mode?
+                SM = 1; HP -= 2
+            elif move == "q":     # Quit game
+                playing = False
+                break
+            else:
+                map_move = True
+                move = int(move)
+
+        # You lose HP as you move, doubly so if you are in shift
+        # mode to move through walls. If we drop below 0XP, end of game.
+        HP=HP-.15-2*SX 
+        if HP < 0:
+            break
+
+        # If we're here, we're moving. Check to see if we're moving
+        # thru the spaces between rooms - if so, we need to be in shift
+        # mode. (not sure how I'm going to implement that.) Then, check
+        # to see if we're trying to move through an impassable order.
+        # In either case, go get player input again.
+        # See annotated source for how Q works, but it essentially 
+        # converts the player direction input into the number of 
+        # grid spaces (assume 40c x 25r screen) to move the player.
+        Q = MOVEMAP[move]-41
+        if (PEEK(dungeon_map,L+Q)==" " and SX!=1) or \
+            (PEEK(dungeon_map,L+Q)==BORDER):
+            continue
+        else:
+            POKE(player_map,L,W)
+            L=L+Q
+            W = PEEK(dungeon_map,L)
+            POKE(player_map,L,PLAYER)
+
+            # Determine/paint what is visible # GOSUB 600
+            ### TODO ###
+
+
+    if HP <= 0:
+        print("You're dead!")
+        print("Gold: {} Exp: {} Killed {} Beasts".format(MG, EX, Z))
+        input("Press return to see the dungeon map. ")
 
     # Display the dungeon map
-    display_dungeon_map(dungeon_map)
+    display_dungeon_map(dungeon_map, True)
 
-    print("Want to play again?")
+    print("Want to play again? ", end="")
     if not input().lower().startswith("y"):
         sys.exit(0)
