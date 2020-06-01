@@ -184,6 +184,14 @@ def get_player_input(HP, EX, MG):
     return move
 
 
+def end_game(MG, EX, Z, end_message):
+    print(end_message)
+    print("Gold: {} Exp: {} Killed {} Beasts".format(MG, EX, Z))
+    input("Press return to see the dungeon map. ")
+    # Display the dungeon map
+    display_dungeon_map(dungeon_map, True)
+
+
 # Display welcome
 display_welcome()
 
@@ -212,11 +220,13 @@ while True:
     # Player Map is what is displayed to the player as they navigate the dungeon
     player_map = init_map()
 
+    # 210 HP=50:MG=0:EX=0:PX=0:HG=0:Z=0:FG=0:K1=0:E=0:S=0:W=160:ET=160
     # HP is player hit points; MG is gold recovered; EX is experience earned
     # HG is hidden gold; Z is number of monsters killed; SX is "shift mode" to move
     # thru walls [not sure how I'm going to implement that yet...]; W is what was in
-    # the space that the player just moved thru.
-    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD; Z=0; SX=0; W=FLOOR
+    # the space that the player just moved thru; K1 is how much gold has been uncovered; 
+    # FG is found gold (revealed on map); 
+    HP=50; MG=0; EX=0; HG=NUM_HIDDEN_GOLD; Z=0; SX=0; W=FLOOR; K1=0; FG=0; 
 
     good_location = False
     while not good_location:
@@ -268,6 +278,7 @@ while True:
         # mode to move through walls. If we drop below 0XP, end of game.
         HP=HP-.15-2*SX 
         if HP < 0:
+            playing = False
             break
 
         # If we're here, we're moving. Check to see if we're moving
@@ -291,14 +302,20 @@ while True:
             # Determine/paint what is visible # GOSUB 600
             ### TODO ###
 
+            if W == GOLD:
+                MG=MG+K1
+                print("You found {} gold pieces!".format(K1))
+                POKE(dungeon_map, L, FLOOR)
+                W = FLOOR
+                HG -= 1
+                if HG == 0:
+                    playing = False
+                    break
 
     if HP <= 0:
-        print("You're dead!")
-        print("Gold: {} Exp: {} Killed {} Beasts".format(MG, EX, Z))
-        input("Press return to see the dungeon map. ")
-
-    # Display the dungeon map
-    display_dungeon_map(dungeon_map, True)
+        end_game(MG,EX,Z,"You're dead!")
+    if HG == 0:
+        end_game(MG,EX,Z,"You found all the gold! You won!")
 
     print("Want to play again? ", end="")
     if not input().lower().startswith("y"):
