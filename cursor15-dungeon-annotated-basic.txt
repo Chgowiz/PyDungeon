@@ -69,7 +69,9 @@ $ FOR I= 31848 + 40 TO 31848 + 920 - 41:POKEI,32:NEXTI
 #* Z is number of monsters killed
 #* W is for what was in the space that the player just moved
 #* K1 is how much gold has been uncovered; 
-#* FG is found gold (out of the 11) 
+#* FG is found gold (out of the 11), but it seems related more to 
+#     the timing of the pause when you find the gold. It's not used
+#     for anything else. 
 #  E is ...
 #  S is ...
 #  ET is ...
@@ -112,6 +114,7 @@ Timer to slow things down
 ==> GOSUB 600
 # Compute effect of putting player on screen... what can they see around
 # them initially?
+!!!! NEED TO DO !!!!
 <== RETURN from 600 back to 260
 
 #* Start of input loop
@@ -156,16 +159,20 @@ $ QP = 151
 
 # If we move onto a monster - attack routine!
 340 IFW>=214ANDW<=219THENGOSUB1000
+!!!! NEED TO DO !!!!
 
 ==> GOSUB 1000
 # A fight! To the death!
+!!!! NEED TO DO !!!!
 <== RETURN FROM 1000
 
+!!!! NEED TO DO !!!!
 350 IFE>0THENS=S+1
 360 IFS>1THENGOSUB830
 
 ==> GOSUB 830
 # Finally, the monsters move, if they've seen the player...
+!!!! NEED TO DO !!!!
 <== RETURN FROM 830
 
 # Continue game!
@@ -235,15 +242,34 @@ $ P = 32303
 
 
 # SUB == evaluate player move and what they see as a result
+# NOTE: K, J, M are not used! I think they're leftovers from when perhaps
+# Brian intended on implementing SM mode / SEE further mode!
+# That's why S costs HP - you will see 2 squares in each direction, not just one. 
+# He just never finished it, apparently. 
 600 K=-40:J=3:M=40:R=3:GN=0
 610 IFSM=1THENK=-80:J=5:M=80:R=4:SM=0
+
+# O is meant to give the location to view from, taking into account where memory stops/starts.
 620 O=L-32767-R
 630 IFO+32811>33768THENM=0
+
+# Look at what is around from the dungeon map and put it on the screen
 640 FORN=-40TO40STEP40:FORN1=1TO3:IFN=0ANDN1=2THEN820
 650 Y=O+N+N1:V=PEEK(Y+TS):POKEY+AX,V
+
+# If we've only revealed a floor or space, continue with the N/N1 loop
 660 IFV<135ORV=160THEN820
+# If we've revealed a monster, then go to that code (710)
 670 V=V-128:IFV<>7THEN710
+# We've revealed gold - how much? Here's a funny by-product of this. Because we redo
+# this "what's seen" code, each time we repaint the gold, we recalculate K1! So it's 
+# truly random as to what we might find, and that value will always change! Later on,
+# we use the latest value of K1 when we actually touch gold. (and repaint the screen.)
+# Cute and clever, Brian... you don't have to track the amount when you see it. Just
+# use the last value...
 680 K1=1+K1+INT((MG+1)*(RND(1)))
+# GN and FG seem to be about the timing of this message. It's not really used 
+# for anything else. MG is what shows how much gold is collected. 
 690 GN=GN+1:IFGN>FGTHENGOSUB1410:PRINT"GOLD IS NEAR!":GOSUB1430:FG=HG+1
 700 GOTO820
 710 V1=V+128:S=0:POKEY+TS,160
@@ -314,9 +340,9 @@ $ P = 32303
 1180 RETURN
 # === END Monster Attacks Sub
 
+
 #* SUB Death routine - display final status 
 1190 GOSUB1410:PRINT"YOU'RE DEAD!":GOSUB1430:GOTO1350
-
 
 
 #* SUB found gold routine
