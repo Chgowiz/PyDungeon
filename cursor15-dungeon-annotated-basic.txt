@@ -72,7 +72,9 @@ $ TS = 31848
 # HP is player hit points
 # MG is gold recovered
 # EX is experience earned
-# HG is hidden gold (max of 12)
+# HG is hidden gold (max of 11)
+# Z is number of monsters killed
+# W is for what was in the space that the player just moved
 # rest are to be determined
 
 220 TI$="000000":TM=TI+3600		# This is related to timer and how 
@@ -148,40 +150,83 @@ $ P = 32303
 580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
 590 RETURN
 
-
-
+<== RETURN FROM 380 <==
 240 TS = TS - BL
 240 31848 = 31848 - 80 
-$ TS = 31768
-
-# TS is that number from 190, where did BL come from?
-240 TS=TS-BL
+$ TS = 31768   # Now 1000 away from AX/32768
 
 # Put the player somewhere? L must be (L)ocation
-
 250 L=INT(RND(1)*SZ+TS):IFPEEK(L)<>160THEN250
 
-# More TM stuff. 
 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
 
-# == Start of game loop??? 
-# Look for player input
+==> GOSUB 1410
+# TI is a magic variable that gets the number of "jiffies" or time
+# passed. This slows things down? I thought perhaps this has something
+# to do with screen refresh, but I'm not 100% sure. 
+1410 IF IU THEN IF TI<TM THEN 1410
+1420 PRINTER$;:IU=0:RETURN
+<== from 1420
+
+260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
+# Now we're putting the player on the screen.
+# AX is start of screen mem. 
+# Look at the screen/player map to see what is at L. 
+# W is what is on the map prior to 'gosub 600', which is the player map
+# display/movement loop, I think. Once we've done all that, put the player
+# token down, which is a dot (but ends up being a reversed dot?) 
+# and then W will be 160 (floor) again.
+
+==> GOSUB 600
+
+
+
+<== from 600 back to 260
+
+260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
+# Put player onto the screen and reset W to be 160
+
+
+# Start of input loop
+$ QK = 158
+$ QP = 151 
 270 POKEQK,0:POKEQP,255:GOSUB1240
+# These two pokes set the keyboard buffer count to 0
+# and set the "key pressed" to be nothing (FF)
 
-280 {Player HP}={Player HP}-.15-2*SX:IF{Player HP}<0THEN1190
+==> GOSUB 1240 
+   GET PLAYER MOVE, direction move stored in A. Also, SM might be set to 1
+<== RETURN FROM 1240
 
+# Movement costs HP! Moreso if moving shifted through the dark spaces
+# If HP<0, then you're dead!
+280 HP=HP-.15-2*SX:IFHP<0THEN1190
+
+# Are we moving? If so, are we moving into a space between floors? If so, 
+# are we in shift mode? If not, ignore the entry.
+# Did we hit an impassable border (around the map)?
+# If so, ignore the entry
+# Here's the deal about 290
+# It takes your 1-9 input and through this little trick, converts it 
+# into the number of memory positions you're moving. If we go back to thinking
+# of this as a grid 40cols x 25rows display - then hitting 6 moves you right (+1)
+# position. Hitting 1 (diagonal down/left) moves you +39 positions. It's very
+# clever!
 290 Q=VAL(MID$("808182404142000102",A*2-1,2))-41
 300 IF(PEEK(L+Q)=32)AND(SX<>1)THEN270
 310 IFPEEK(L+Q)=127THEN270
+
+#Move the player 
 320 POKEL,W:L=L+Q:W=PEEK(L):POKEL,209:GOSUB600:POKEL,209
+
+### NOTE 5/31, stopped here.
+
 330 IFW=135THENGOSUB1200
 340 IFW>=214ANDW<=219THENGOSUB1000
 350 IFE>0THENS=S+1
 360 IFS>1THENGOSUB830
 370 GOTO270
 # == End of game loop
-
-
 
 
 
@@ -239,6 +284,7 @@ $ TS = 31768
 1060 GOSUB1410:PRINT"WILL YOU CONSENT TO THIS (Y OR N) ";
 1070 GOSUB1500
 1080 IFL$="Y"THENMG=MG-MG/2:W=160:E=0:S=0:POKEL,209:RETURN
+
 # if monster is still alive.
 1090 IF{Monster HP}>1THEN1160
 1100 GOSUB1410:W=160:S=0:E=0:POKEL,209:PRINT"THE "{Monster}" IS DEAD!":GOSUB1430
@@ -247,12 +293,15 @@ $ TS = 31768
 1130 PX=EX:{Player HP}={Player HP}*3
 1140 GOSUB1410:PRINT"YOUR HIT PTS. HAVE BEEN RAISED.":GOSUB1430
 1150 GOTO1180
+
 # SUB monster is still alive!
 1160 GOSUB1410:PRINT"THE "{Monster}" HAS"{Monster HP}"HIT POINTS":GOSUB1430
 1170 GOSUB1340
 1180 RETURN
+
 # SUB Death routine - display final status 
 1190 GOSUB1410:PRINT"YOU'RE DEAD!":GOSUB1430:GOTO1350
+
 # Display how much gold found - not sure what is going on here.
 1200 MG=MG+K1:GOSUB1410:PRINT"YOU FOUND"K1"GOLD PIECES!":GOSUB1430
 
@@ -263,14 +312,28 @@ $ TS = 31768
 1220 HG=HG-1:IFHG>0THENRETURN
 1230 GOTO1350
 
-# == GAME LOOP == ??
 
+
+# == 1240 GAME INPUT LOOP == 
 1240 IFIU=0THENGOSUB1430
 
+==> GOSUB 1430
+1430 TM=TI+3*60:IU=1:RETURN
+<== RETURN from 1430
 
-# Player move - get input and evaluate. 
 1250 GOSUB1340
-1260 IFIUTHENIFTI>TMTHENGOSUB1410:PRINT"YOU MAY MOVE."
+
+== > 1340
+# Refresh status line
+1340 PRINTE2$;"HIT PTS.";INT({Player HP}+.5);"{LEFT}  EXP.";EX;"{LEFT}  GOLD";MG;"   ":RETURN
+<== RETURN FROM 1340
+
+1260 IF IU THEN IF TI>TM THEN GOSUB1410: PRINT"YOU MAY MOVE."
+
+# Get player input - set it to a known value
+# What this does is to convert values into the < 127 range. 
+# If a player is moving "shifted" - they can go through walls. 
+# but it will cost them HP (elsewhere). 
 1270 GETL$:IFL$=""THEN1260
 1280 A=ASC(L$):SX=ABS(A>127):A=AAND127
 
@@ -278,14 +341,19 @@ $ TS = 31768
 1290 IFA=ASC("5")THEN{Player HP}={Player HP}+1+SQR(EX/{Player HP})
 
 # player can move on keypad in any direction. A holds the value of their move
+# converted to 123456789 
 1300 IFA>48ANDA<58THENA=A-48:TM=0:GOSUB1410:RETURN
 
-# not sure what "S" does but it reduces {Player HP}!
+# not sure what "S" does but it reduces {Player HP}! Not sure what SM=1 does yet either.
 1310 IFL$="S"THENSM=1:{Player HP}={Player HP}-2 
 
 #quit
 1320 IFL$="Q"THEN1350
 1330 GOTO1250
+
+# End of 1240 == INPUT LOOP ==
+
+
 
 # Sub Refresh status line 1
 1340 PRINTE2$;"HIT PTS.";INT({Player HP}+.5);"{LEFT}  EXP.";EX;"{LEFT}  GOLD";MG;"   ":RETURN
@@ -300,12 +368,16 @@ $ TS = 31768
 1390 GOSUB1500:IFL$<>"N"THEN180
 1400 TM=0:GOSUB1410:PRINT"{UP}";:END
 
-# Some sort of delay, perhaps?
+# Input delay. I think about a second or so. 
 1410 IF IU THEN IF TI<TM THEN 1410
 1420 PRINTER$;:IU=0:RETURN
 
-# SUB - not sure yet.
+# SUB - not sure yet. IU seems to possibly be another magical value or
+# some sort of control. This seems to force TM to be higher value by 3 seconds than 
+# TI which is the internal clock. Maybe this along with 1410 is how input happens?
 1430 TM=TI+3*60:IU=1:RETURN
+
+# SUB - not sure yet
 1440 IFPEEK(32768)=0THENSTOP
 1450 RETURN
 
@@ -319,13 +391,15 @@ $ TS = 31768
 # SUB - Clear screen - reset all variables - Start game (goto 100)
 60300 PRINT"{CLEAR}":CLR:GOSUB60400:GOTO100
 
-# SUB - not sure what this is doing. It affects QK, QM, QP
-# -- These are poke values. 
-# -- I think it's related to which ROM/Basic I have. Might not be important for the game logic.
+# SUB - Which BASIC do I have? 
+# QM is the "top of memory" - when it ends
+# QK is the num of chars in keyboard buffer
+# QP is the location that says what key is pressed.
 # 134 = 0x86, 52 = 0x34
+# Assume Basic 1 - these values are for that.
 60400 QK=525:QM=134:QP=515:CR$=CHR$(13)
-60410 IFPEEK(50000)=0THENRETURN
-60420 QK=158:QM=52:QP=151   #Basic 2/4 pointer - limit of memory
+60410 IFPEEK(50000)=0THENRETURN  # This check confirms BASIC 1 - not sure how/why but there you have it.
+60420 QK=158:QM=52:QP=151   #Basic 2/4 pointers
 60430 RETURN
 
 # SUB print 40 "lines" (CHR$(192) apparently)
