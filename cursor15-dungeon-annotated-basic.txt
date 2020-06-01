@@ -1,11 +1,8 @@
 Variable settings and code run
 # $8000 = 32768 = start of screen memory - $8400 acts like $8000 on 40 col machine
+0 POKE59468,12 		# set computer into graphics mode
 
-0
-POKE59468,12 		# set computer into graphics mode
-
-90
-PG$="DUNGEON"		# display related - program name for std CURSOR display
+90 PG$="DUNGEON"		# display related - program name for std CURSOR display
 NM$="15"			# display related - Cursor issue #
 GOSUB 62000
 
@@ -50,7 +47,8 @@ $ CS = 39
 130 REM TRICK: DG$() STRINGS GO AT END OF MEMORY!
 140 DIMDG$(24):E$="                                        "
 150 FORI=0TO24:DG$(I)=E$+"":NEXTI
-# Setting up 2 status bars, perhaps?
+
+# Setting up 2 status bars lines
 160 ER$="{HOME}{DOWN}                                       {HOME}{DOWN}"
 170 E2$="{HOME}                                       {HOME}"
 
@@ -69,13 +67,18 @@ $ TS = 31848
 # Putting spaces into this memory - perhaps to clear the in-mem map?
 
 210 HP=50:MG=0:EX=0:PX=0:HG=0:Z=0:FG=0:K1=0:E=0:S=0:W=160:ET=160
-# HP is player hit points
-# MG is gold recovered
-# EX is experience earned
-# HG is hidden gold (max of 11)
-# Z is number of monsters killed
-# W is for what was in the space that the player just moved
-# rest are to be determined
+#* HP is player hit points
+#* MG is gold recovered
+#* EX is experience earned
+#* HG is hidden gold (max of 11)
+#* Z is number of monsters killed
+#* W is for what was in the space that the player just moved
+#* K1 is how much gold has been uncovered; 
+#* FG is found gold (out of the 11) 
+#  E is ...
+#  S is ...
+#  ET is ...
+#  PX is ...
 
 220 TI$="000000":TM=TI+3600		# This is related to timer and how 
 								# things were mapped to the screen. Perhaps
@@ -87,17 +90,17 @@ $ TM is going to be some magic number + 3600
 230 GOSUB 380
 
 ==>380
-# Seems to generate the dungeon...
+#* Seems to generate the dungeon...
 380 PRINT INT((TM-TI)/60);"{LEFT}  {UP}"  #print the countdown
 380 PRINT INT((3600-TI/60) 				  # Counts down a minute
 
 400 W=INT(RND(1)*9+2):L=INT(RND(1)*9+2)
-# RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
+#* RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
 $ W = 6 (cols)
 $ L = 4 (rows)
 
 410 R0=INT(RND(1)*(RS-L-1))+1:C0=INT(RND(1)*(CS-W-1))+1:P=TS+40*R0+C0
-# RS is 22, CS is 39
+#* RS is 22, CS is 39
 # example R0 = 11, C0 = 15, P=31848+40*R0+C0
 $ R0 = 11
 $ C0 = 15
@@ -115,37 +118,37 @@ $ P = 32303
 												# that in a bit
 
 430 FORN=0TOL+1:FORN1=0TOW+1:IFPEEK(P+(N*40)+N1)<>32THEN530
-# This checks to see if this space is taken up. If it is, then we goto 530... which will continue building
+#* This checks to see if this space is taken up. If it is, then we goto 530... which will continue building
 # if we have enoght time
 440 NEXTN1,N
 
 450 FORN=1TOL:FORN1=1TOW:POKEP+(N*40)+N1,160:NEXTN1,N
-# This puts char160, which is a filled in solid block into the room area.
+#* This puts char160, which is a filled in solid block into the room area.
 
-# Generate vertical passages from generated room down.
+#* Generate vertical passages from generated room down.
 460 FORN=P+42+(L*40)TOTS+999STEP40
 # FOR N = (P=start of room in memory) + 42 + (Length*40) to (TS = 31848)+999=32847 - Step every 40
 #
 470 IFPEEK(N)=160THENFORN1=P+42TONSTEP40:POKEN1,160:NEXT:POKEN1-80,102:GOTO490
 480 NEXTN
 
-# Generate horizontal passages from generate room right.
+#* Generate horizontal passages from generate room right.
 490 FORN=P+81+WTOP+121+W:IF(N-TS)/40=INT((N-TS)/40)THEN520
 500 IFPEEK(N)=160THENFORN1=P+81TON-1:POKEN1,160:NEXT:POKEN1-1,102:GOTO520
 510 NEXT
 
-# Generate a monster in the room. Every room has a monster, huh?
+#* Generate a monster in the room. Every room has a monster, huh?
 520 S=INT(RND(1)*L)+1:S1=INT(RND(1)*W+1):POKEP+S1+S*40,INT(RND(1)*6+214)
 
 # Timer check
 530 IFTI<TMTHEN380
 
-# Generate gold
+#* Generate gold
 540 FORN=1TO11
 550 U=INT(RND(1)*SZ)+TS:IFPEEK(U)<>160THEN550
 560 POKEU,135:HG=HG+1:NEXT
 
-# Generate borders (I think)
+#* Generate borders (I think)
 570 FORR0=0TORS:POKETS+40*R0,127:POKETS+40*R0+CS,127:NEXTR0
 580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
 590 RETURN
@@ -155,7 +158,7 @@ $ P = 32303
 240 31848 = 31848 - 80 
 $ TS = 31768   # Now 1000 away from AX/32768
 
-# Put the player somewhere? L must be (L)ocation
+#* Put the player somewhere? L must be (L)ocation
 250 L=INT(RND(1)*SZ+TS):IFPEEK(L)<>160THEN250
 
 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
@@ -169,7 +172,7 @@ $ TS = 31768   # Now 1000 away from AX/32768
 <== from 1420
 
 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
-# Now we're putting the player on the screen.
+#* Now we're putting the player on the screen.
 # AX is start of screen mem. 
 # Look at the screen/player map to see what is at L. 
 # W is what is on the map prior to 'gosub 600', which is the player map
@@ -184,10 +187,10 @@ $ TS = 31768   # Now 1000 away from AX/32768
 <== from 600 back to 260
 
 260 TM=0:GOSUB1410:L=L+AX-TS:W=PEEK(L):GOSUB600:POKEL,209:W=160
-# Put player onto the screen and reset W to be 160
+#* Put player onto the screen and reset W to be 160
 
 
-# Start of input loop
+#* Start of input loop
 $ QK = 158
 $ QP = 151 
 270 POKEQK,0:POKEQP,255:GOSUB1240
@@ -198,15 +201,15 @@ $ QP = 151
    GET PLAYER MOVE, direction move stored in A. Also, SM might be set to 1
 <== RETURN FROM 1240
 
-# Movement costs HP! Moreso if moving shifted through the dark spaces
+#* Movement costs HP! Moreso if moving shifted through the dark spaces
 # If HP<0, then you're dead!
 280 HP=HP-.15-2*SX:IFHP<0THEN1190
 
-# Are we moving? If so, are we moving into a space between floors? If so, 
+#* Are we moving? If so, are we moving into a space between floors? If so, 
 # are we in shift mode? If not, ignore the entry.
 # Did we hit an impassable border (around the map)?
 # If so, ignore the entry
-# Here's the deal about 290
+# Here's the deal about line 290
 # It takes your 1-9 input and through this little trick, converts it 
 # into the number of memory positions you're moving. If we go back to thinking
 # of this as a grid 40cols x 25rows display - then hitting 6 moves you right (+1)
@@ -216,15 +219,26 @@ $ QP = 151
 300 IF(PEEK(L+Q)=32)AND(SX<>1)THEN270
 310 IFPEEK(L+Q)=127THEN270
 
-#Move the player 
+#*Move the player 
 320 POKEL,W:L=L+Q:W=PEEK(L):POKEL,209:GOSUB600:POKEL,209
+
+#* If we found gold..
+330 IFW=135THENGOSUB1200
+
+==> GOSUB 1200
+
+<== RETURN 1200 to 330
 
 ### NOTE 5/31, stopped here.
 
-330 IFW=135THENGOSUB1200
+# If we move onto a monster - attack routine!
 340 IFW>=214ANDW<=219THENGOSUB1000
+
+
 350 IFE>0THENS=S+1
 360 IFS>1THENGOSUB830
+
+# Continue game!
 370 GOTO270
 # == End of game loop
 
@@ -242,17 +256,20 @@ $ QP = 151
 690 GN=GN+1:IFGN>FGTHENGOSUB1410:PRINT"GOLD IS NEAR!":GOSUB1430:FG=HG+1
 700 GOTO820
 710 V1=V+128:S=0:POKEY+TS,160
-720 IFV=86THEN{Monster}="SPIDER":I=3
-730 IFV=87THEN{Monster}="GRUE":I=7
-740 IFV=88THEN{Monster}="DRAGON":I=1
-750 IFV=89THEN{Monster}="SNAKE":I=2
-760 IFV=90THEN{Monster}="NUIBUS":I=9
-770 IFV=91THEN{Monster}="WYVERN":I=5
+720 IFV=86THENE$="SPIDER":I=3
+730 IFV=87THENE$="GRUE":I=7
+740 IFV=88THENE$="DRAGON":I=1
+750 IFV=89THENE$="SNAKE":I=2
+760 IFV=90THENE$="NUIBUS":I=9
+770 IFV=91THENE$="WYVERN":I=5
 780 I=INT(RND(1)*{Player HP}+(PX/I)+{Player HP}/4)
 790 IFE>0THENPOKETS+E,QQ
 800 QQ=V+128:E=Y
-810 GOSUB1410:PRINT"A "{Monster};" WITH";I;"POINTS IS NEAR.":GOSUB1430:{Monster HP}=I
+810 GOSUB1410:PRINT"A "E$;" WITH";I;"POINTS IS NEAR.":GOSUB1430:CC=I
 820 NEXTN1:NEXTN:FG=GN:RETURN
+
+
+
 830 O1=0:A=0:E1=E+AX:IFABS(E1+40-L)<ABS(E1-L)THENA=40
 840 IFABS(E1-40-L)<ABS(E1-L)THENA=-40
 850 IF(PEEK(E+A+TS)=209)OR(PEEK(E+A+TS)>128)THENO1=O1+A
@@ -271,23 +288,27 @@ $ QP = 151
 980 RETURN
 990 QQ=V+128:E=Y
 
-# Monster attacks routine
-1000 GOSUB1410:PRINT"{RVS ON}AN ATTACK!!!":GOSUB1430:PW={Player HP}+EX
-1010 H1=RND(1)*{Monster HP}/2+{Monster HP}/4:CH=RND(1)*PW/2+PW/4:{Monster HP}=INT({Monster HP}-CH):{Player HP}=INT({Player HP}-H1)
-# If Player HP 0 or less, go to death routine
-1020 IF{Player HP}<1THEN1190
-# Monster will negotiate if they are more than 2x higher than player
 
-1030 IF({Monster HP}/({Player HP}+1)<2)THEN1090
-1040 GOSUB1410:PRINT"THE "{Monster}" WILL LEAVE..":GOSUB1430
+# Monster attacks routine
+1000 GOSUB1410:PRINT"{RVS ON}AN ATTACK!!!":GOSUB1430:PW=HP+EX
+1010 H1=RND(1)*CC/2+CC/4:CH=RND(1)*PW/2+PW/4:CC=INT(CC-CH):HP=INT(HP-H1)
+
+# If Player HP 0 or less, go to death routine
+1020 IFHP<1THEN1190
+
+# Monster will negotiate if they are more than 2x higher than player
+1030 IF(CC/({Player HP}+1)<2)THEN1090
+1040 GOSUB1410:PRINT"THE "E$" WILL LEAVE..":GOSUB1430
 1050 GOSUB1410:PRINT"IF YOU GIVE IT HALF YOUR GOLD.":GOSUB1430
 1060 GOSUB1410:PRINT"WILL YOU CONSENT TO THIS (Y OR N) ";
 1070 GOSUB1500
 1080 IFL$="Y"THENMG=MG-MG/2:W=160:E=0:S=0:POKEL,209:RETURN
 
 # if monster is still alive.
-1090 IF{Monster HP}>1THEN1160
-1100 GOSUB1410:W=160:S=0:E=0:POKEL,209:PRINT"THE "{Monster}" IS DEAD!":GOSUB1430
+1090 IFCC>1THEN1160
+
+# if monsters is dead
+1100 GOSUB1410:W=160:S=0:E=0:POKEL,209:PRINT"THE "E$" IS DEAD!":GOSUB1430
 1110 EX=EX+I:Z=Z+1
 1120 IFEX<PX*2THEN1180
 1130 PX=EX:{Player HP}={Player HP}*3
@@ -295,26 +316,26 @@ $ QP = 151
 1150 GOTO1180
 
 # SUB monster is still alive!
-1160 GOSUB1410:PRINT"THE "{Monster}" HAS"{Monster HP}"HIT POINTS":GOSUB1430
+1160 GOSUB1410:PRINT"THE "E$" HAS"CC"HIT POINTS":GOSUB1430
 1170 GOSUB1340
 1180 RETURN
 
-# SUB Death routine - display final status 
+
+#* SUB Death routine - display final status 
 1190 GOSUB1410:PRINT"YOU'RE DEAD!":GOSUB1430:GOTO1350
 
-# Display how much gold found - not sure what is going on here.
+#* SUB found gold routine
+# Display how much gold found - K1 is calculated elsewhere
 1200 MG=MG+K1:GOSUB1410:PRINT"YOU FOUND"K1"GOLD PIECES!":GOSUB1430
-
-
-
-# Probably changing the player icon to something like a filled in space?
+#*Now replace the gold with space on dungeon map
 1210 POKEL-AX+TS,160:W=160
+#* If there's still hidden gold, continue playing. Otherwise, end game!
 1220 HG=HG-1:IFHG>0THENRETURN
 1230 GOTO1350
 
 
 
-# == 1240 GAME INPUT LOOP == 
+#* == 1240 GAME INPUT LOOP == 
 1240 IFIU=0THENGOSUB1430
 
 ==> GOSUB 1430
@@ -324,44 +345,44 @@ $ QP = 151
 1250 GOSUB1340
 
 == > 1340
-# Refresh status line
+#* Refresh status line
 1340 PRINTE2$;"HIT PTS.";INT({Player HP}+.5);"{LEFT}  EXP.";EX;"{LEFT}  GOLD";MG;"   ":RETURN
 <== RETURN FROM 1340
 
 1260 IF IU THEN IF TI>TM THEN GOSUB1410: PRINT"YOU MAY MOVE."
 
-# Get player input - set it to a known value
+#* Get player input - set it to a known value
 # What this does is to convert values into the < 127 range. 
 # If a player is moving "shifted" - they can go through walls. 
 # but it will cost them HP (elsewhere). 
 1270 GETL$:IFL$=""THEN1260
 1280 A=ASC(L$):SX=ABS(A>127):A=AAND127
 
-# If waiting in place regain {Player HP}
+#* If waiting in place regain {Player HP}
 1290 IFA=ASC("5")THEN{Player HP}={Player HP}+1+SQR(EX/{Player HP})
 
-# player can move on keypad in any direction. A holds the value of their move
+#* player can move on keypad in any direction. A holds the value of their move
 # converted to 123456789 
 1300 IFA>48ANDA<58THENA=A-48:TM=0:GOSUB1410:RETURN
 
-# not sure what "S" does but it reduces {Player HP}! Not sure what SM=1 does yet either.
+#* not sure what "S" does but it reduces {Player HP}! Not sure what SM=1 does yet either.
 1310 IFL$="S"THENSM=1:{Player HP}={Player HP}-2 
 
-#quit
+#*quit
 1320 IFL$="Q"THEN1350
 1330 GOTO1250
 
-# End of 1240 == INPUT LOOP ==
+#* End of 1240 == INPUT LOOP ==
 
 
 
-# Sub Refresh status line 1
+#* Sub Refresh status line 1
 1340 PRINTE2$;"HIT PTS.";INT({Player HP}+.5);"{LEFT}  EXP.";EX;"{LEFT}  GOLD";MG;"   ":RETURN
 
-# Sub display game totals
+#* Sub display game totals
 1350 GOSUB1410:PRINTE2$;"GOLD:";MG;" EXP:";EX;" KILLED";Z;"BEASTS"
 
-# This routine displays the map and asks if player wants to go again
+#* This routine displays the map and asks if player wants to go again
 1360 FORN=BLTOSZ-1+BL:A=PEEK(TS+N):POKEAX+N,A:NEXT
 1375 GETL$:IFL$<>""THEN1375
 1380 GOSUB1410:PRINT"WANT TO PLAY AGAIN";
@@ -381,17 +402,17 @@ $ QP = 151
 1440 IFPEEK(32768)=0THENSTOP
 1450 RETURN
 
-
+# SUB - not sure yet
 1500 ZT=0:ZC=1
 1510 GETL$:IFL$<>""THEN1550
 1520 IFTI>ZTTHENPRINTMID$("? ",ZC,1);"{LEFT}";:ZT=TI+30:ZC=3-ZC
 1530 GOTO1510
 1550 PRINT"? ";L$:RETURN
 
-# SUB - Clear screen - reset all variables - Start game (goto 100)
+#* SUB - Clear screen - reset all variables - Start game (goto 100)
 60300 PRINT"{CLEAR}":CLR:GOSUB60400:GOTO100
 
-# SUB - Which BASIC do I have? 
+#* SUB - Which BASIC do I have? 
 # QM is the "top of memory" - when it ends
 # QK is the num of chars in keyboard buffer
 # QP is the location that says what key is pressed.
@@ -402,10 +423,10 @@ $ QP = 151
 60420 QK=158:QM=52:QP=151   #Basic 2/4 pointers
 60430 RETURN
 
-# SUB print 40 "lines" (CHR$(192) apparently)
+#* SUB print 40 "lines" (CHR$(192) apparently)
 60500 FORI=1TO10:PRINT"{192}{192}{192}{192}";:NEXTI:RETURN
 
-# SUB - Print intro
+#* SUB - Print intro
 62000 PRINT"{CLEAR}{DOWN}{DOWN}";TAB(9);"CURSOR #";NM$;"  ";PG$
 62010 PRINT"{DOWN} COPYRIGHT (C) 1979  BY BRIAN SAWYER{DOWN}"
 62020 GOSUB60500  # Print a line across the screen
