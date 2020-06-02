@@ -68,21 +68,19 @@ $ FOR I= 31848 + 40 TO 31848 + 920 - 41:POKEI,32:NEXTI
 #* HG is hidden gold (max of 11)
 #* Z is number of monsters killed
 #* W is for what was in the space that the player just moved
-#* K1 is how much gold has been uncovered; 
-#* FG is found gold (out of the 11), but it seems related more to 
-#     the timing of the pause when you find the gold. It's not used
-#     for anything else. 
-#  E is ...
+#* K1 is how much gold has been uncovered
+#* FG is found gold flag - used for showing "Gold is near" text
+#  E is current monster location
+#  PX is value needed for player to level up
 #  S is ...
-#  ET is ...
-#  PX is ...
+#  ET is NEVER USED! 
+# There are other values sprinkled around that are initialized and 
+# used globally later, mostly for monster stats.
 
-# This is related to timer and how 
-# things were mapped to the screen. Perhaps
-# this was done to reduce flickering?
-# TI was a magic number that gave number of "jiffies"
+# 220 is related to timer and how long of a pause for printing messages or 
+# getting input. TI was a magic BASIC variable that gave number of "jiffies"
+# See Commodore documentation on that lovely concept.
 220 TI$="000000":TM=TI+3600
-$ TM is going to be some magic number + 3600
 
 # Build the Dungeon!!
 230 GOSUB 380
@@ -150,6 +148,11 @@ $ QP = 151
 #*Move the player 
 320 POKEL,W:L=L+Q:W=PEEK(L):POKEL,209:GOSUB600:POKEL,209
 
+==> GOSUB 600
+# What does the player see? Activate the last monster revealed, 
+# set up the random gold value to be found.
+<== RETURN FROM 600
+
 #* If we found gold..
 330 IFW=135THENGOSUB1200
 
@@ -159,11 +162,9 @@ $ QP = 151
 
 # If we move onto a monster - attack routine!
 340 IFW>=214ANDW<=219THENGOSUB1000
-!!!! NEED TO DO !!!!
 
 ==> GOSUB 1000
-# A fight! To the death!
-!!!! NEED TO DO !!!!
+# A fight! Who will win?
 <== RETURN FROM 1000
 
 !!!! NEED TO DO !!!!
@@ -259,8 +260,10 @@ $ P = 32303
 
 # If we've only revealed a floor or space, continue with the N/N1 loop
 660 IFV<135ORV=160THEN820
+
 # If we've revealed a monster, then go to that code (710)
 670 V=V-128:IFV<>7THEN710
+
 # We've revealed gold - how much? Here's a funny by-product of this. Because we redo
 # this "what's seen" code, each time we repaint the gold, we recalculate K1! So it's 
 # truly random as to what we might find, and that value will always change! Later on,
@@ -268,18 +271,25 @@ $ P = 32303
 # Cute and clever, Brian... you don't have to track the amount when you see it. Just
 # use the last value...
 680 K1=1+K1+INT((MG+1)*(RND(1)))
-# GN and FG seem to be about the timing of this message. It's not really used 
-# for anything else. MG is what shows how much gold is collected. 
+# GN and FG are about how often the message "GOLD IS NEAR" is displayed.
+# It's an odd way to set up a "we've seen this already" True/False flag.
 690 GN=GN+1:IFGN>FGTHENGOSUB1410:PRINT"GOLD IS NEAR!":GOSUB1430:FG=HG+1
 700 GOTO820
+
+# Revealed a monster - put a floor in its place on the dungeon map
 710 V1=V+128:S=0:POKEY+TS,160
+# V is the character representing monster type. I is its HP.
 720 IFV=86THENE$="SPIDER":I=3
 730 IFV=87THENE$="GRUE":I=7
 740 IFV=88THENE$="DRAGON":I=1
 750 IFV=89THENE$="SNAKE":I=2
 760 IFV=90THENE$="NUIBUS":I=9
 770 IFV=91THENE$="WYVERN":I=5
+#Generate monster hp
 780 I=INT(RND(1)*{Player HP}+(PX/I)+{Player HP}/4)
+# if we've generated a previous monster, E holds its position. QQ holds
+# what type of monster it is. Put it back on the dungeon map. 
+# I guess this implies that only one monster at a time can be 'active'?
 790 IFE>0THENPOKETS+E,QQ
 800 QQ=V+128:E=Y
 810 GOSUB1410:PRINT"A "E$;" WITH";I;"POINTS IS NEAR.":GOSUB1430:CC=I
@@ -308,37 +318,48 @@ $ P = 32303
 # This code is never reached/run! Same as line 800.
 990 QQ=V+128:E=Y
 
-# SUB Monster attacks 
+
+# SUB - AN ATTACK!
 1000 GOSUB1410:PRINT"{RVS ON}AN ATTACK!!!":GOSUB1430:PW=HP+EX
+
+#* Calculate how much HP is spent for player/monster - both hit!
 1010 H1=RND(1)*CC/2+CC/4:CH=RND(1)*PW/2+PW/4:CC=INT(CC-CH):HP=INT(HP-H1)
-
-# If Player HP 0 or less, go to death routine
+#* If Player HP 0 or less, go to death routine
 1020 IFHP<1THEN1190
-
-# Monster will negotiate if they are more than 2x higher than player
+#* Monster will negotiate if their HP is more than 2x higher than player
 1030 IF(CC/({Player HP}+1)<2)THEN1090
 1040 GOSUB1410:PRINT"THE "E$" WILL LEAVE..":GOSUB1430
 1050 GOSUB1410:PRINT"IF YOU GIVE IT HALF YOUR GOLD.":GOSUB1430
 1060 GOSUB1410:PRINT"WILL YOU CONSENT TO THIS (Y OR N) ";
 1070 GOSUB1500
+
+==> GOSUB 1500
+# Input routine - makes ? blink, puts value in L$
+<== RETURN FROM 1500
+
+#* If yes, then monster disappears! 
 1080 IFL$="Y"THENMG=MG-MG/2:W=160:E=0:S=0:POKEL,209:RETURN
 
-# if monster is still alive.
+#* if monster is still alive.
 1090 IFCC>1THEN1160
 
-# if monsters is dead
+#* if monsters is dead
 1100 GOSUB1410:W=160:S=0:E=0:POKEL,209:PRINT"THE "E$" IS DEAD!":GOSUB1430
+# Monsters HP is experience reward. Increment monster kill counter.
 1110 EX=EX+I:Z=Z+1
+# If we haven't doubled our experience, then return
 1120 IFEX<PX*2THEN1180
+#Otherwise, set our next levelup point, increase our HP
 1130 PX=EX:{Player HP}={Player HP}*3
+#Print a message and delay.
 1140 GOSUB1410:PRINT"YOUR HIT PTS. HAVE BEEN RAISED.":GOSUB1430
 1150 GOTO1180
 
-# SUB monster is still alive!
+# monster is still alive!
 1160 GOSUB1410:PRINT"THE "E$" HAS"CC"HIT POINTS":GOSUB1430
 1170 GOSUB1340
 1180 RETURN
-# === END Monster Attacks Sub
+# === END Attack Sub
 
 
 #* SUB Death routine - display final status 
