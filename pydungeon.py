@@ -15,6 +15,7 @@ HEIGHT = 25
 RM_GEN_RETRIES = 50
 DESIRED_RMS = 8
 MONSTERS = ["X","G","D","S","N","W"]
+BLANK = " "
 FLOOR = "."
 DOOR = "+"
 GOLD = "g"
@@ -48,6 +49,7 @@ class GameState():
         self.found_gold = False
 
         self.whats_here = FLOOR
+        self.monster_whats_here = FLOOR
         self.see_more = False
         self.shift_mode = 0
 
@@ -63,7 +65,7 @@ class GameState():
         self.monster_level = 0
         self.monster_hp = 0
         self.monster_loc = 0
-        self.monster_S = 0
+        self.monster_delay = 0
         self.prev_monster = ""
 
 
@@ -91,7 +93,7 @@ def init_map():
     for row in range(HEIGHT):
         map_struct.append([])
         for col in range(WIDTH):
-            map_struct[row].append(" ")
+            map_struct[row].append(BLANK)
 
     return map_struct
 
@@ -152,7 +154,7 @@ def gen_dungeon(SZ, RS, CS):
         failed_check = False
         for N in range(-1,(L+1)+1):
             for N1 in range(-1, (W+1)+1):
-                if PEEK(mem, P+(N*40+N1)) != " ":
+                if PEEK(mem, P+(N*40+N1)) != BLANK:
                     failed_check = True
                     break
 
@@ -271,11 +273,9 @@ def what_is_seen(game_state):
 
                 game_state.active_monster = V
                 
-                ## TODO - uncomment this when we want to have the active
-                # monster move.
-                # POKE(game_state.dungeon_map, Y, FLOOR)
+                POKE(game_state.dungeon_map, Y, FLOOR)
 
-                game_state.monster_S = 0
+                game_state.monster_delay = 0
 
                 # Monster HP based on our HP, experience and random
                 # We save the level for later if we defeat the monster, to 
@@ -299,6 +299,67 @@ def what_is_seen(game_state):
                 continue
     
     game_state.found_gold = gold_near
+
+
+def monster_move(game_state):
+    move_adj = 0; move_dir = 0; monster_move = 0
+
+    if abs(game_state.monster_loc + 40 - game_state.player_loc) < \
+        abs(game_state.monster_loc - game_state.player_loc):
+        move_adj = 40
+
+    if abs(game_state.monster_loc - 40 - game_state.player_loc) < \
+        abs(game_state.monster_loc - game_state.player_loc):
+        move_adj = -40
+
+    target = PEEK(game_state.dungeon_map, game_state.monster_loc + move_adj)
+    if target==PLAYER or target==FLOOR or target==GOLD:
+        move_dir += move_adj
+
+    if abs(game_state.monster_loc - 1 - game_state.player_loc) < \
+        abs(game_state.monster_loc - game_state.player_loc):
+        move_adj = -1
+
+    if abs(game_state.monster_loc + 1 - game_state.player_loc) < \
+        abs(game_state.monster_loc - game_state.player_loc):
+        move_adj = 1
+
+    target = PEEK(game_state.dungeon_map, game_state.monster_loc + 
+                  move_dir + move_adj)
+    if target==PLAYER or target==FLOOR or target==GOLD:
+        move_dir += move_adj
+
+    
+    if game_state.monster_loc + move_dir < game_state.player_loc:
+      if move_dir==39:
+        move_dir=41
+      if move_dir==-41:
+        move_dir=-39
+    elif game_state.monster_loc + move_dir > game_state.player_loc:
+      if move_dir==41:
+        move_dir=39
+      if move_dir==-39:
+        move_dir=41
+
+    target = PEEK(game_state.dungeon_map, game_state.monster_loc+move_dir)
+    
+    # If we can't move into the target because there is something there that
+    # we can't cross, then just stay put.
+    if target == BLANK or target == BORDER or target==DOOR:
+        POKE(game_state.player_map,game_state.monster_loc,game_state.active_monster)
+        return
+
+    POKE(game_state.player_map, game_state.monster_loc, 
+         game_state.monster_whats_here)
+
+    game_state.monster_loc += move_dir
+    game_state.monster_whats_here = PEEK(game_state.player_map, 
+                                         game_state.monster_loc)
+    POKE(game_state.player_map,game_state.monster_loc,
+         game_state.active_monster)
+    if game_state.monster_loc==game_state.player_loc:
+        attack(game_state)
+
 
 def attack(game_state):
     print_pause("## AN ATTACK! ##")
@@ -350,7 +411,9 @@ def remove_monster(game_state):
     game_state.whats_here = FLOOR
     game_state.monster_loc = 0
     game_state.active_monster = ""
-    game_state.monster_S = 0
+    game_state.monster_delay = 0
+    game_state.monster_whats_here = FLOOR
+
     POKE(game_state.player_map, game_state.player_loc, PLAYER)
 
 
@@ -477,7 +540,7 @@ while True:
         # grid spaces (assume 40c x 25r screen) to move the player.
         if map_move: 
             Q = MOVEMAP[move]-41
-            if (PEEK(game.dungeon_map,game.player_loc+Q)==" " \
+            if (PEEK(game.dungeon_map,game.player_loc+Q)==BLANK \
                 and game.shift_mode!=1) or \
                 (PEEK(game.dungeon_map,game.player_loc+Q)==BORDER):
                 continue
@@ -510,9 +573,19 @@ while True:
                         playing = False
                         break
 
-                # If there's an active monster, it moves, and
-                # can attack, same "round"
-
+                # If there's an active monster on the map,
+                # check its delay, if its delay is > 1, then
+                # it can move. This gives the player a chance
+                # to escape!
+                if game.monster_loc > 0:
+                    game.monster_delay += 1
+                if game.monster_delay > 1:
+                    monster_move(game)
+                    # There can be an attack after the monster
+                    # move, so check player HP again.
+                    if game.player_HP <= 0:
+                        playing = False
+                        break
 
     if game.player_HP <= 0:
         end_game(game,"You're dead!")
