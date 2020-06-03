@@ -9,6 +9,7 @@ import sys
 from os import system, name
 from time import sleep
 from math import sqrt
+import curses
 
 WIDTH = 40
 HEIGHT = 25
@@ -25,6 +26,9 @@ PLAYER = "@"
 VALIDMOVES = "qs123456789"
 MOVEMAP = [41,80,81,82,40,41,42,0,1,2]
 PRINT_PAUSE = 1
+
+STATUS_ROW = 0
+MESSAGE_ROW = 1
 
 class GameState():
 
@@ -76,14 +80,58 @@ def cls():
         _ = system("clear")
 
 
-def display_welcome():
-    cls()
-    print("          PyDungeon\n    A recreation of CURSOR #15 DUNGEON")
-    print("Original (C)1979 by Brian Sawyer.\nPyDungeon is public domain.")
-    print("-" * 40)
-    print_pause("Search for GOLD in the ancient ruins\n")
-    print("Press RETURN to begin")
-    input()
+def display_welcome(screen):
+    screen.clear()
+    screen.addstr("  PYDUNGEON\n A recreation of CURSOR #15 DUNGEON\n")
+    screen.addstr("Original (C)1979 by Brian Sawyer.\nPyDungeon is public domain.\n")
+    screen.addstr(("-" * 40) + "\n")
+    screen.addstr("Search for GOLD in the ancient ruins\n\n")
+    screen.addstr("Press ")
+    screen.addstr("RETURN", curses.A_REVERSE)
+    screen.addstr(" to begin ")
+    screen.refresh()
+    keystr = ""
+    while keystr != "\n" and keystr != "padenter":
+        keystr = screen.getkey().lower()
+
+
+def message_update(screen, msg, reversed=False):
+    if reversed:
+        attrib = curses.A_REVERSE
+    else: 
+        attrib = curses.A_NORMAL
+
+    screen.addstr(MESSAGE_ROW, 0, " " * WIDTH)
+    screen.addstr(MESSAGE_ROW, 0, msg, attrib)
+    screen.refresh()
+    sleep(1)
+
+
+def get_player_move(screen, game_state):
+    screen.addstr(STATUS_ROW, 0, 
+      "HIT PTS. {}  EXP. {}  GOLD {}".format(
+        int(game_state.player_HP+.5), 
+        game_state.player_experience, 
+        game_state.player_gold))
+
+    move = "X"
+    while not move in VALIDMOVES:
+        move = get_input(screen, "You may move. ")
+
+    return move
+
+
+def get_input(screen, msg=""):
+    if msg != "":
+        screen.addstr(MESSAGE_ROW, 0, " " * WIDTH)
+        screen.addstr(MESSAGE_ROW, 0, msg)
+        screen.refresh()
+        sleep(.5)
+    keystr = ""
+    while keystr == "":
+        keystr = screen.getkey().lower()
+
+    return keystr
 
 
 def init_map():
@@ -218,7 +266,7 @@ def gen_dungeon(SZ, RS, CS):
     return mem
 
 
-def what_is_seen(game_state):
+def what_is_seen(screen, game_state):
 
     ## BUG ## - the view "wraps" if we're right next to the border. The border needs
     # to stop the view
@@ -248,7 +296,7 @@ def what_is_seen(game_state):
                 gold_near = True
                 # If we've not been near this gold, announce it.
                 if not game_state.found_gold:
-                    print_pause("Gold is near!")
+                    message_update(screen, "Gold is near!")
                 
                 continue
             if V in MONSTERS:
@@ -293,7 +341,7 @@ def what_is_seen(game_state):
                          game_state.prev_monster)
                 game_state.prev_monster = game_state.active_monster
                 game_state.monster_loc = Y
-                print_pause("A {} with {} points is near!".format(
+                message_update(screen, "A {} with {} points is near!".format(
                     game_state.monster_name, game_state.monster_hp))
 
                 continue
@@ -301,7 +349,7 @@ def what_is_seen(game_state):
     game_state.found_gold = gold_near
 
 
-def monster_move(game_state):
+def monster_move(screen, game_state):
     move_adj = 0; move_dir = 0; monster_move = 0
 
     if abs(game_state.monster_loc + 40 - game_state.player_loc) < \
@@ -358,11 +406,11 @@ def monster_move(game_state):
     POKE(game_state.player_map,game_state.monster_loc,
          game_state.active_monster)
     if game_state.monster_loc==game_state.player_loc:
-        attack(game_state)
+        attack(screen, game_state)
 
 
-def attack(game_state):
-    print_pause("## AN ATTACK! ##")
+def attack(screen, game_state):
+    message_update(screen, "AN ATTACK!", True)
     player_power = game_state.player_HP+game_state.player_experience
     monster_attack=random()*game_state.monster_hp/2+game_state.monster_hp/4
     player_attack=random()*player_power/2+player_power/4
@@ -374,12 +422,13 @@ def attack(game_state):
         # If monster is twice as strong as player, it will make
         # an offer that the player can't refuse...
         if (game_state.monster_hp/game_state.player_HP+1)>2:
-            print_pause("The {} will leave, IF you will give it half your gold.".format(
+            message_update(screen, 
+                "The {} will leave, IF you will give it half your gold.".format(
                 game_state.monster_name))
             responded = False
             answer = ""
             while not responded:
-                answer = input("Will you consent to this (Y or N)? ").lower().strip()
+                answer = get_input(screen, "Will you consent to this (Y or N)? ")
                 if answer.startswith("y") or answer.startswith("n"):
                     responded = True
             if answer == "y":
@@ -388,19 +437,21 @@ def attack(game_state):
                 remove_monster(game_state)
                 return
         elif game_state.monster_hp > 0:
-            print_pause("The {} has {} hit points".format(game_state.monster_name,
-                                                    game_state.monster_hp))
+            message_update(screen, 
+              "The {} has {} hit points".format(game_state.monster_name,
+                                                game_state.monster_hp))
             return
         else:
             # The monster is dead
             game_state.player_experience += game_state.monster_level
             game_state.monsters_killed += 1
-            print_pause("The {} is dead!".format(game_state.monster_name))
+            message_update(screen, 
+                           "The {} is dead!".format(game_state.monster_name))
             remove_monster(game_state)
             if game_state.player_experience >= game_state.next_level * 2:
                 game_state.next_level = game_state.player_experience
                 game_state.player_HP *= 3
-                print_pause("Your hit pts. have been raised")
+                message_update(screen, "Your hit pts. have been raised")
                 return
     else:
         # Death routine will be handled from check in main loop.
@@ -417,184 +468,181 @@ def remove_monster(game_state):
     POKE(game_state.player_map, game_state.player_loc, PLAYER)
 
 
-def print_pause(msg):
-    print(msg)
-    sleep(PRINT_PAUSE)
-
-
-def display_dungeon_map(map, final=False):
-    cls()
-    for row in map[:-2]:
-        print("".join(row))
+def display_dungeon_map(screen, map, final=False):
+    for row in range(0, HEIGHT-2):
+        screen.addstr(row+2, 0, "".join(map[row]))
+        screen.refresh()
         if final:
             sleep(.5)
 
+def end_game(screen, game_state, end_message):
+    screen.clear()
+    if end_message != "":
+        message_update(screen, end_message)
+        sleep(2)
 
-def get_player_input(game_state):
-    print("HIT PTS. {}  EXP. {}  GOLD {}".format(
-        int(game_state.player_HP+.5), 
-        game_state.player_experience, 
-        game_state.player_gold))
-    print("You may move. ", end="")
-
-    move = input().lower().strip()
-    if len(move) > 1 or move not in VALIDMOVES:
-        move = ""
-    return move
-
-
-def end_game(game_state, end_message):
-    print_pause(end_message)
-    print("Gold: {} Exp: {} Killed {} Beasts".format(
+    screen.addstr(STATUS_ROW, 0, "Gold: {} Exp: {} Killed {} Beasts".format(
         game_state.player_gold, 
         game_state.player_experience, 
         game_state.monsters_killed))
-    input("Press return to see the dungeon map. ")
 
+    screen.refresh()
 
-# Display welcome
-display_welcome()
+def main(screen):
+    # Display welcome
+    display_welcome(screen)
 
-# Game loop
-while True:
-    # Initialize vars and maps
-    cls()
-    print("Setting up...")
+    # Game loop
+    while True:
+        screen.clear()
+        screen.addstr(STATUS_ROW, 0, "Setting up...")
+        screen.refresh()
 
-    # Look at annotated source and line 210 to see several of the variables needed
-    # to be tracked through this game. Everything was global. To manage that mess,
-    # I created a class struct to hold the game state.
-    game = GameState()
+        # Ensure that our terminal/output device supports the screen size.
+        num_rows, num_cols = screen.getmaxyx()
+        assert num_rows >= HEIGHT and num_cols >= WIDTH, \
+            "Terminal/screen needs to be {} rows by {} cols.".format(HEIGHT, WIDTH)
 
-    # Dungeon Map is the generated map
-    game.dungeon_map = gen_dungeon(game.SZ, game.RS, game.CS)
+        # Initialize vars and maps
+        # Look at annotated source and line 210 to see several of the variables needed
+        # to be tracked through this game. Everything was global. To manage that mess,
+        # I created a class struct to hold the game state.
+        game = GameState()
 
-    # Player Map is what is displayed to the player as they navigate the dungeon
-    game.player_map = init_map()
+        # Dungeon Map is the generated map
+        game.dungeon_map = gen_dungeon(game.SZ, game.RS, game.CS)
 
-    good_location = False
-    while not good_location:
-        game.player_loc = int(random()*game.SZ)
-        good_location = (PEEK(game.dungeon_map, game.player_loc) == FLOOR)
+        # Player Map is what is displayed to the player as they navigate the dungeon
+        game.player_map = init_map()
+
+        good_location = False
+        while not good_location:
+            game.player_loc = int(random()*game.SZ)
+            good_location = (PEEK(game.dungeon_map, game.player_loc) == FLOOR)
     
-    game.whats_here = PEEK(game.dungeon_map, game.player_loc)
+        game.whats_here = PEEK(game.dungeon_map, game.player_loc)
 
-    # Determine/display what is visible
-    what_is_seen(game)
+        # Determine/display what is visible
+        what_is_seen(screen, game)
 
-    POKE(game.player_map, game.player_loc, PLAYER)
-    game.whats_here = FLOOR
+        POKE(game.player_map, game.player_loc, PLAYER)
+        game.whats_here = FLOOR
 
-    # Input/Move loop
-    # This is not set up like DUNGEON!
-    # Since (right now), Python doesn't accept keystrokes and respond to them
-    # immediately - it requires a return for input (I'm going to look into curses!)
-    # So the input/play loop is a little different. 
-    # I'm also not limiting input to 1 per second. 
-    playing = True
-    while playing:
-        map_move = False
-        # Eligible moves are 1-9 for directions
-        # except 5, which is a "wait" (and heal!)
-        # S is 'see more' and q is quit.
-        # so if 5 or S, update HP, continue to get input.
-        # if q, then break out of this while and stop playing. 
-        # if invalid input (""), continue to get input till valid.
-        # Otherwise, continue on to calculate the results of the move!
-        while not map_move:
-            display_dungeon_map(game.player_map)
-            move = get_player_input(game)
+        # Input/Move loop
+        # This is not set up like DUNGEON!
+        # Since (right now), Python doesn't accept keystrokes and respond to them
+        # immediately - it requires a return for input (I'm going to look into curses!)
+        # So the input/play loop is a little different. 
+        # I'm also not limiting input to 1 per second. 
+        playing = True
+        while playing:
+            map_move = False
+            # Eligible moves are 1-9 for directions
+            # except 5, which is a "wait" (and heal!)
+            # S is 'see more' and q is quit.
+            # so if 5 or S, update HP, continue to get input.
+            # if q, then break out of this while and stop playing. 
+            # if invalid input (""), continue to get input till valid.
+            # Otherwise, continue on to calculate the results of the move!
+            while not map_move:
+                display_dungeon_map(screen, game.player_map)
+                move = get_player_move(screen, game)
 
-            if move == "":
-                pass
-            elif move == "5":     # Rest/recover HP
-                game.player_HP += 1+sqrt(game.player_experience/game.player_HP)
-                map_move = True
-                move = 5
-            elif move == "s":     # See more mode
-                game.see_more = True
-                game.player_HP -= 2
-                map_move = True   # Force a map move/screen refresh
-                move = 5          # but make it a "stay put" move.
-            elif move == "q":     # Quit game
+                if move == "":
+                    pass
+                elif move == "5":     # Rest/recover HP
+                    game.player_HP += 1+sqrt(game.player_experience/game.player_HP)
+                    map_move = True
+                    move = 5
+                elif move == "s":     # See more mode
+                    game.see_more = True
+                    game.player_HP -= 2
+                    map_move = True   # Force a map move/screen refresh
+                    move = 5          # but make it a "stay put" move.
+                elif move == "q":     # Quit game
+                    playing = False
+                    break
+                else:
+                    map_move = True
+                    move = int(move)
+
+            # You lose HP as you move, doubly so if you are in shift
+            # mode to move through walls. If we drop below 0XP, end of game.
+            game.player_HP -= .15 - 2 * game.shift_mode
+            if game.player_HP <= 0:
                 playing = False
                 break
-            else:
-                map_move = True
-                move = int(move)
 
-        # You lose HP as you move, doubly so if you are in shift
-        # mode to move through walls. If we drop below 0XP, end of game.
-        game.player_HP -= .15 - 2 * game.shift_mode
-        if game.player_HP <= 0:
-            playing = False
-            break
+            # If we're here, we're moving. Check to see if we're moving
+            # thru the spaces between rooms - if so, we need to be in shift
+            # mode. (not sure how I'm going to implement that.) Then, check
+            # to see if we're trying to move through an impassable order.
+            # In either case, go get player input again.
+            # See annotated source for how Q works, but it essentially 
+            # converts the player direction input into the number of 
+            # grid spaces (assume 40c x 25r screen) to move the player.
+            if map_move: 
+                Q = MOVEMAP[move]-41
+                if (PEEK(game.dungeon_map,game.player_loc+Q)==BLANK \
+                    and game.shift_mode!=1) or \
+                    (PEEK(game.dungeon_map,game.player_loc+Q)==BORDER):
+                    continue
+                else:
+                    POKE(game.player_map,game.player_loc,game.whats_here)
+                    game.player_loc+=Q
+                    game.whats_here = PEEK(game.dungeon_map,game.player_loc)
+                    POKE(game.player_map,game.player_loc,PLAYER)
 
-        # If we're here, we're moving. Check to see if we're moving
-        # thru the spaces between rooms - if so, we need to be in shift
-        # mode. (not sure how I'm going to implement that.) Then, check
-        # to see if we're trying to move through an impassable order.
-        # In either case, go get player input again.
-        # See annotated source for how Q works, but it essentially 
-        # converts the player direction input into the number of 
-        # grid spaces (assume 40c x 25r screen) to move the player.
-        if map_move: 
-            Q = MOVEMAP[move]-41
-            if (PEEK(game.dungeon_map,game.player_loc+Q)==BLANK \
-                and game.shift_mode!=1) or \
-                (PEEK(game.dungeon_map,game.player_loc+Q)==BORDER):
-                continue
-            else:
-                POKE(game.player_map,game.player_loc,game.whats_here)
-                game.player_loc+=Q
-                game.whats_here = PEEK(game.dungeon_map,game.player_loc)
-                POKE(game.player_map,game.player_loc,PLAYER)
+                    # What do we see now as a result of the move?
+                    what_is_seen(screen, game)
 
-                # What do we see now as a result of the move?
-                #CC,E,S,V1,ESTR = what_is_seen()
-                what_is_seen(game)
-
-                # If we moved onto gold...
-                if game.whats_here == GOLD:
-                    game.player_gold+=game.gold_stash
-                    print_pause("You found {} gold pieces!".format(game.gold_stash))
-                    POKE(game.dungeon_map, game.player_loc, FLOOR)
-                    game.whats_here = FLOOR
-                    game.hidden_gold -= 1
-                    if game.hidden_gold == 0:
-                        playing = False
-                        break
+                    # If we moved onto gold...
+                    if game.whats_here == GOLD:
+                        game.player_gold+=game.gold_stash
+                        message_update(screen, "You found {} gold pieces!".format(game.gold_stash))
+                        POKE(game.dungeon_map, game.player_loc, FLOOR)
+                        game.whats_here = FLOOR
+                        game.hidden_gold -= 1
+                        if game.hidden_gold == 0:
+                            playing = False
+                            break
                 
-                # If we move onto a monster, attack!
-                if game.whats_here in MONSTERS:
-                    attack(game)
+                    # If we move onto a monster, attack!
+                    if game.whats_here in MONSTERS:
+                        attack(screen, game)
 
-                    if game.player_HP <= 0:
-                        playing = False
-                        break
+                        if game.player_HP <= 0:
+                            playing = False
+                            break
 
-                # If there's an active monster on the map,
-                # check its delay, if its delay is > 1, then
-                # it can move. This gives the player a chance
-                # to escape!
-                if game.monster_loc > 0:
-                    game.monster_delay += 1
-                if game.monster_delay > 1:
-                    monster_move(game)
-                    # There can be an attack after the monster
-                    # move, so check player HP again.
-                    if game.player_HP <= 0:
-                        playing = False
-                        break
+                    # If there's an active monster on the map,
+                    # check its delay, if its delay is > 1, then
+                    # it can move. This gives the player a chance
+                    # to escape!
+                    if game.monster_loc > 0:
+                        game.monster_delay += 1
+                    if game.monster_delay > 1:
+                        monster_move(screen, game)
+                        # There can be an attack after the monster
+                        # move, so check player HP again.
+                        if game.player_HP <= 0:
+                            playing = False
+                            break
 
-    if game.player_HP <= 0:
-        end_game(game,"You're dead!")
-    if game.hidden_gold == 0:
-        end_game(game,"You found all the gold! You won!")
+        if game.player_HP <= 0:
+            end_game(screen, game,"You're dead!")
+        elif game.hidden_gold == 0:
+            end_game(screen, game,"You found all the gold! You won!")
+        else:
+            end_game(screen, game, "")
 
-    # Display the dungeon map
-    display_dungeon_map(game.dungeon_map, True)
+        # Display the dungeon map
+        display_dungeon_map(screen, game.dungeon_map, True)
 
-    print("Want to play again? ", end="")
-    if not input().lower().startswith("y"):
-        sys.exit(0)
+        playagain = get_input(screen, "Want to play again? ")
+        if not playagain.startswith("y"):
+            sys.exit(0)
+
+
+# Safely start/end curses windowing
+curses.wrapper(main)
