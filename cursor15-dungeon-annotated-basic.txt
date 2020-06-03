@@ -72,8 +72,9 @@ $ FOR I= 31848 + 40 TO 31848 + 920 - 41:POKEI,32:NEXTI
 #* FG is found gold flag - used for showing "Gold is near" text
 #  E is current monster location
 #  PX is value needed for player to level up
-#  S is ...
-#  ET is NEVER USED! 
+#  S is a delay counter - if the player just spotted the monster, 
+#     then this is used elsewhere to give them a chance to retreat!
+#  ET is used to hold what the monster moves over.
 # There are other values sprinkled around that are initialized and 
 # used globally later, mostly for monster stats.
 
@@ -112,7 +113,6 @@ Timer to slow things down
 ==> GOSUB 600
 # Compute effect of putting player on screen... what can they see around
 # them initially?
-!!!! NEED TO DO !!!!
 <== RETURN from 600 back to 260
 
 #* Start of input loop
@@ -167,13 +167,19 @@ $ QP = 151
 # A fight! Who will win?
 <== RETURN FROM 1000
 
-!!!! NEED TO DO !!!!
+# If there's an active monster (E is set w/location)
+# then increment S, and if S is > 1, move the monster.
+# This gives the player time to escape. If they start out
+# next to the monster, S is 0. E is set to monster location.
+# This code will run, S increments to one, S>1 is false, so the
+# game loop continues to the next player move. THEN, with monster
+# still on screen, E>0, S will increment, then the condition is met
+# and the monster will move. 
 350 IFE>0THENS=S+1
 360 IFS>1THENGOSUB830
 
 ==> GOSUB 830
 # Finally, the monsters move, if they've seen the player...
-!!!! NEED TO DO !!!!
 <== RETURN FROM 830
 
 # Continue game!
@@ -298,6 +304,11 @@ $ P = 32303
 
 
 # SUB == Monster reaction/movement AI
+# The math here is a little baffling and there's a bug. The
+# bottom line is that it looks at player position vs. 
+# monster position and tries to calculate the best move.
+# It's tracking itself across the screen, since it's been
+# "removed" from the dungeon memory map.
 830 O1=0:A=0:E1=E+AX:IFABS(E1+40-L)<ABS(E1-L)THENA=40
 840 IFABS(E1-40-L)<ABS(E1-L)THENA=-40
 850 IF(PEEK(E+A+TS)=209)OR(PEEK(E+A+TS)>128)THENO1=O1+A
@@ -305,17 +316,25 @@ $ P = 32303
 870 IFABS(E1+1-L)<ABS(E1-L)THENA=1
 880 IF(PEEK(E+O1+A+TS)=209)OR(PEEK(E+O1+A+TS)>128)THENO1=O1+A
 890 A=O1:IFE1+A=LTHEN960
+# The following lines 900-950 baffle me. I'm not sure if Brian
+# programmed in some dumbness, but the overall math is wonky and
+# doesn't quite work. This is probably one of the areas I'd like to
+# "improve" at some point.
 900 IFE1+A<LTHEN940
 910 IFA=41THENA=39
 920 IFA=-39THENA=-41
 930 GOTO960
+# I think this is a bug! I think it should be A=39. At least
+# that would follow the pattern. 
 940 IFA=31THENA=41
 950 IFA=-41THENA=-39
+# If there's something it can't cross (border, space, door), then stay put
 960 IFPEEK(E+A+TS)<128THENPOKEE1,V1:RETURN
+# Move the monster. If we're on the player, ATTACK!
 970 POKEE1,ET:E=E+A:ET=PEEK(E+AX):POKEE+AX,V1:IFE+AX=LTHENET=160:GOSUB1000
 980 RETURN
 
-# This code is never reached/run! Same as line 800.
+# This code is never reached/run! It's the same as line 800.
 990 QQ=V+128:E=Y
 
 
