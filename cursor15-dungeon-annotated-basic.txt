@@ -102,7 +102,7 @@ $ TS = 31768   # Now 1000 away from AX/32768
 # AX is start of screen mem. 
 # Look at the screen/player map to see what is at L. 
 # W is what is on the map prior to 'gosub 600', which is the player map
-# display/movement loop, I think. Once we've done all that, put the player
+# display/movement loop. Once we've done all that, put the player
 # token down, which is a dot (but ends up being a reversed dot?) 
 # and then W will be 160 (floor) again.
 
@@ -193,8 +193,6 @@ $ QP = 151
 #* Generate width/length of a room
 400 W=INT(RND(1)*9+2):L=INT(RND(1)*9+2)
 #* RND(1) = 0.999 - .999 * 9 + 2 = 10 - so rooms no more than 10x10? perhaps?
-$ W = 6 (cols)
-$ L = 4 (rows)
 
 # Calculate where on map room will be
 410 R0=INT(RND(1)*(RS-L-1))+1:C0=INT(RND(1)*(CS-W-1))+1:P=TS+40*R0+C0
@@ -206,7 +204,7 @@ $ P = 32303
 
 # If room size will take us beyond map limit, don't use this room
 420 IFP+40*L+W>=TS+SZTHEN530
-420 IF 32303+40*4+6 >= TS+SZ THEN (GOTO) 530	
+# IF 32303+40*4+6 >= TS+SZ THEN (GOTO) 530	
 
 # The GOTO 530 checks to see if we've run out of time
 # to build the dungeon. So the computer will keep 
@@ -216,7 +214,7 @@ $ P = 32303
 430 FORN=0TOL+1:FORN1=0TOW+1:IFPEEK(P+(N*40)+N1)<>32THEN530
 440 NEXTN1,N
 
-#* This puts char160, which is a filled in solid block into the room area.
+#* This puts char160, which is a filled in solid block, into the room area.
 450 FORN=1TOL:FORN1=1TOW:POKEP+(N*40)+N1,160:NEXTN1,N
 
 #* Generate vertical passages from generated room down.
@@ -230,7 +228,7 @@ $ P = 32303
 500 IFPEEK(N)=160THENFORN1=P+81TON-1:POKEN1,160:NEXT:POKEN1-1,102:GOTO520
 510 NEXT
 
-#* Generate a monster in the room. Every room has a monster, huh?
+#* Generate a monster in the room. Every room has a monster!
 520 S=INT(RND(1)*L)+1:S1=INT(RND(1)*W+1):POKEP+S1+S*40,INT(RND(1)*6+214)
 
 # Timer check - if we've enough time, continue building rooms.
@@ -241,7 +239,7 @@ $ P = 32303
 550 U=INT(RND(1)*SZ)+TS:IFPEEK(U)<>160THEN550
 560 POKEU,135:HG=HG+1:NEXT
 
-#* Generate borders (I think)
+#* Generate borders
 570 FORR0=0TORS:POKETS+40*R0,127:POKETS+40*R0+CS,127:NEXTR0
 580 FORC0=0TOCS:POKETS+C0,127:POKETS+C0+40*RS,127:NEXTC0
 590 RETURN
@@ -251,7 +249,7 @@ $ P = 32303
 # SUB == evaluate player move and what they see as a result
 # NOTE: K, J, M are not used! I think they're leftovers from when perhaps
 # Brian intended on implementing SM mode / SEE further mode!
-# That's why S costs HP - you will see 2 squares in each direction, not just one. 
+# That's why S costs HP - you were then supposed to see 2 squares in each direction.
 # He just never finished it, apparently. 
 600 K=-40:J=3:M=40:R=3:GN=0
 610 IFSM=1THENK=-80:J=5:M=80:R=4:SM=0
@@ -295,7 +293,7 @@ $ P = 32303
 780 I=INT(RND(1)*{Player HP}+(PX/I)+{Player HP}/4)
 # if we've generated a previous monster, E holds its position. QQ holds
 # what type of monster it is. Put it back on the dungeon map. 
-# I guess this implies that only one monster at a time can be 'active'?
+# This means that only one monster at a time can be 'active'
 790 IFE>0THENPOKETS+E,QQ
 800 QQ=V+128:E=Y
 810 GOSUB1410:PRINT"A "E$;" WITH";I;"POINTS IS NEAR.":GOSUB1430:CC=I
@@ -425,7 +423,7 @@ $ P = 32303
 # converted to 123456789 
 1300 IFA>48ANDA<58THENA=A-48:TM=0:GOSUB1410:RETURN
 
-#* not sure what "S" does but it reduces {Player HP}! Not sure what SM=1 does yet either.
+#* The not-quite-finished "See More" mode, if you hit S
 1310 IFL$="S"THENSM=1:{Player HP}={Player HP}-2 
 
 #*quit
@@ -455,9 +453,9 @@ $ P = 32303
 1420 PRINTER$;:IU=0:RETURN
 
 
-# SUB - not sure yet. IU seems to possibly be another magical value or
+# SUB - IU seems to possibly be another magical value or
 # some sort of control. This seems to force TM to be higher value by 3 seconds than 
-# TI which is the internal clock. Maybe this along with 1410 is how input happens?
+# TI which is the internal clock. 
 1430 TM=TI+3*60:IU=1:RETURN
 
 
