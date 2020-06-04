@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 # Recreation of DUNGEON, a game written by Brian Sawyer for Cursor Magazine,
 # issue #15. Published in Dec 1979. 
 # Michael Shorten, June 2020, Public Domain, I have no rights to original
@@ -26,6 +27,10 @@ PLAYER = "@"
 VALIDMOVES = "qs123456789"
 MOVEMAP = [41,80,81,82,40,41,42,0,1,2]
 PRINT_PAUSE = 1
+WINDOWS_KEYPAD = ["n/a","key_c1","key_c2","key_c3","key_b1","key_b2",
+  "key_b3","key_a1","key_a2","key_a3"]
+LINUX_KEYPAD = ["n/a","key_end","key_down","key_npage","key_left",
+  "n/a","key_right","key_home","key_up","key_ppage"]
 
 STATUS_ROW = 0
 MESSAGE_ROW = 1
@@ -117,6 +122,20 @@ def get_player_move(screen, game_state):
     move = "X"
     while not move in VALIDMOVES:
         move = get_input(screen, "You may move. ")
+
+        # Check to see if the move is one of the special
+        # shift mode values that might occur in windows
+        # or linux/unix. If so, set the move to be the
+        # keypad number and the game state shift mode to on.
+        # otherwise, set shift mode to off.
+        if move in WINDOWS_KEYPAD:
+            move = str(WINDOWS_KEYPAD.index(move))
+            game_state.shift_mode = 1
+        elif move in LINUX_KEYPAD:
+            move = str(LINUX_KEYPAD.index(move))
+            game_state.shift_mode = 1
+        else:
+            game_state.shift_mode = 0
 
     return move
 
@@ -550,25 +569,29 @@ def main(screen):
 
                 if move == "":
                     pass
+
                 elif move == "5":     # Rest/recover HP
                     game.player_HP += 1+sqrt(game.player_experience/game.player_HP)
                     map_move = True
                     move = 5
+
                 elif move == "s":     # See more mode
                     game.see_more = True
                     game.player_HP -= 2
                     map_move = True   # Force a map move/screen refresh
                     move = 5          # but make it a "stay put" move.
+
                 elif move == "q":     # Quit game
                     playing = False
                     break
+
                 else:
                     map_move = True
                     move = int(move)
 
             # You lose HP as you move, doubly so if you are in shift
             # mode to move through walls. If we drop below 0XP, end of game.
-            game.player_HP -= .15 - 2 * game.shift_mode
+            game.player_HP -= .15 + (2 * game.shift_mode)
             if game.player_HP <= 0:
                 playing = False
                 break
