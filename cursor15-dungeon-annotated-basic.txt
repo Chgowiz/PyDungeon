@@ -123,7 +123,8 @@ $ QK = 158
 $ QP = 151 
 
 ==> GOSUB 1240 
-   GET PLAYER MOVE, direction move stored in A. Also, SM might be set to 1
+   GET PLAYER MOVE, direction move stored in A. Also, SX might be set to 1
+   SX is "shift mode", allowing players to move through the blank spaces
 <== RETURN FROM 1240
 
 #* Movement costs HP! Moreso if moving shifted through the dark spaces
