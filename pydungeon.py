@@ -7,14 +7,13 @@
 
 from random import random, randint, choice
 import sys
-from os import system, name
 from time import sleep
 from math import sqrt
 import curses
 
 WIDTH = 40
-HEIGHT = 25
-RM_GEN_RETRIES = 50
+HEIGHT = 23
+ROOM_SIZE_MAX = 10
 DESIRED_RMS = 8
 MONSTERS = ["X","G","D","S","N","W"]
 BLANK = " "
@@ -25,31 +24,18 @@ NUM_HIDDEN_GOLD = 11
 BORDER = "*"
 PLAYER = "@"
 VALIDMOVES = "qs123456789"
-MOVEMAP = [41,80,81,82,40,41,42,0,1,2]
+MOVEMAP = [(0,0),(-1,1),(0,1),(1,1),(-1,0),(0,0),(1,0),(-1,-1),(0,-1),(1,-1)]
 PRINT_PAUSE = 1
 WINDOWS_KEYPAD = ["n/a","key_c1","key_c2","key_c3","key_b1","key_b2",
   "key_b3","key_a1","key_a2","key_a3"]
 LINUX_KEYPAD = ["n/a","key_end","key_down","key_npage","key_left",
   "n/a","key_right","key_home","key_up","key_ppage"]
-
 STATUS_ROW = 0
 MESSAGE_ROW = 1
 
 class GameState():
 
     def __init__(self):
-        # RS/CS are row size, col size for display.
-        # The other variables are used for screen painting purposes.
-        # TS and AX are key variables in the game, they were used to mark the points 
-        # where the program could generate an in-memory map (TS) and then AX was the
-        # point where PET screen memory began. POKEing to locations at AX and beyond
-        # would write to the screen!
-        # We don't really need TS or AX in this program, so I've done away with them.
-        self.RS=23; self.CS=40
-        self.SZ=self.RS*self.CS
-        self.BL=(25-self.RS)*40
-        self.RS-=1; self.CS-=1
-
         self.dungeon_map = []
         self.player_map = []
 
@@ -62,7 +48,8 @@ class GameState():
         self.see_more = False
         self.shift_mode = 0
 
-        self.player_loc = 0
+        self.player_locX = 0
+        self.player_locY = 0
         self.player_HP = 50
         self.player_gold = 0
         self.player_experience = 0
@@ -73,16 +60,10 @@ class GameState():
         self.monster_name = ""
         self.monster_level = 0
         self.monster_hp = 0
-        self.monster_loc = 0
+        self.monster_locX = 0
+        self.monster_locY = 0
         self.monster_delay = 0
         self.prev_monster = ""
-
-
-def cls():
-    if name == "nt":
-        _ = system("cls")
-    else:
-        _ = system("clear")
 
 
 def display_welcome(screen):
@@ -123,27 +104,29 @@ def get_player_move(screen, game_state):
     while not move in VALIDMOVES:
         move = get_input(screen, "You may move. ")
 
-        # Check to see if the move is one of the special
-        # shift mode values that might occur in windows
-        # or linux/unix. If so, set the move to be the
-        # keypad number and the game state shift mode to on.
-        # otherwise, set shift mode to off.
-        if move in WINDOWS_KEYPAD:
-            move = str(WINDOWS_KEYPAD.index(move))
-            game_state.shift_mode = 1
-        elif move in LINUX_KEYPAD:
-            move = str(LINUX_KEYPAD.index(move))
-            game_state.shift_mode = 1
-        else:
-            game_state.shift_mode = 0
+    # Check to see if the move is one of the special
+    # shift mode values that might occur in windows
+    # or linux/unix. If so, set the move to be the
+    # keypad number and the game state shift mode to on.
+    # otherwise, set shift mode to off.
+    if move in WINDOWS_KEYPAD:
+        move = str(WINDOWS_KEYPAD.index(move))
+        game_state.shift_mode = 1
+    elif move in LINUX_KEYPAD:
+        move = str(LINUX_KEYPAD.index(move))
+        game_state.shift_mode = 1
+    else:
+        game_state.shift_mode = 0
 
     return move
 
 
 def get_input(screen, msg=""):
     if msg != "":
-        screen.addstr(MESSAGE_ROW, 0, " " * WIDTH)
-        screen.addstr(MESSAGE_ROW, 0, msg)
+        num_rows, num_cols = screen.getmaxyx()
+        str = msg + (" " * (num_cols-len(msg)))
+        screen.addstr(MESSAGE_ROW, 0, str)
+        screen.move(MESSAGE_ROW, len(msg))
         screen.refresh()
         sleep(.5)
     keystr = ""
@@ -157,197 +140,174 @@ def init_map():
     # Create new map/screen data structure
     # Returns: list of [WIDTH][HEIGHT] elements
     map_struct = []
-    for row in range(HEIGHT):
+    for col in range(WIDTH):
         map_struct.append([])
-        for col in range(WIDTH):
-            map_struct[row].append(BLANK)
+        for row in range(HEIGHT):
+            map_struct[col].append(BLANK)
 
     return map_struct
 
 
-def POKE(memory, location, value):
-    # This translates the concept of a contiguous memory space that 
-    # you can write to into writing to the data structure I've created.
-    # In the PET, both regular memory and screen memory was contiguous,
-    # and when writing to screen memory, PET then translated that 
-    # position XYZ to row/col position on the screen when displaying the
-    # screen.
-    # So, in a sense, my POKE (and PEEK), does that work.
-    # I used the concept of POKE/PEEK to simplify converting the code. 
-    # Plus... my first programs used POKE/PEEK, so this amuses me 
-    # greatly!
-    memory[(location//WIDTH)][(location%WIDTH)] = value
+def generate_rooms(map):
+
+    max_rooms = DESIRED_RMS + choice((-1,0,1))
+
+    # Keep generating rooms until we've hit a limit of DESIRED_RMS(+/- 1) rooms
+    for rooms_generated in range(0,max_rooms):
+        room_width=0; room_height=0
+        roomX=0; roomY=0
+        monsterX=0; monsterY=0
+
+        bad_room = True
+        while bad_room:
+            room_width = randint(2,ROOM_SIZE_MAX)
+            room_height = randint(2,ROOM_SIZE_MAX)
+            # Starting at 1 because 0 is always the border and we want a gap of
+            # at least a space around things.
+            roomX = randint(2,WIDTH-1); roomY = randint(2,HEIGHT-1)         
+
+            # Check to see if the room would extend over borders
+            if roomX+room_width > WIDTH-2 or roomY+room_height > HEIGHT-2:
+                continue        
+
+            # Check to see if room would extend over something already generated
+            # We want a gap of at least 1 space between rooms
+            overlap = False
+            for x in range(roomX-1,roomX+room_width+2):          
+                for y in range(roomY-1,roomY+room_height+2):    
+                    if map[x][y]!= BLANK:           # is something already here?
+                        overlap = True              # then try again
+                        break
+                if overlap:
+                    break
+            if overlap:
+                continue
+
+            bad_room = False           
+
+        # Fill room floor
+        for x in range(roomX,roomX+room_width+1):
+            for y in range(roomY,roomY+room_height+1):
+                map[x][y] = FLOOR
+
+        # Generate vertical passages from generated room down.
+        passageX = roomX + randint(0,room_width)
+        for row in range(roomY+room_height+1,HEIGHT-2):
+            if map[passageX][row] not in (BLANK, BORDER, DOOR):
+                for passageY in range(roomY+room_height+1, row):
+                    map[passageX][passageY]=FLOOR
+                map[passageX][row-1]=DOOR
+                break
+
+        # Generate horizontal passages from generated room right.
+        passageY = roomY + randint(0,room_height)
+        for col in range(roomX + room_width+1, WIDTH-2):
+            if map[col][passageY] not in (BLANK, BORDER, DOOR):
+                for passageX in range(roomX+room_width+1,col):
+                    map[passageX][passageY]=FLOOR
+                map[col-1][passageY]=DOOR
+                break
+
+        # Generate a monster in the room. Every room has a monster!
+        monsterX = randint(roomX, roomX+room_width)
+        monsterY = randint(roomY, roomY+room_height)
+        map[monsterX][monsterY] = choice(MONSTERS)
 
 
-def PEEK(memory, location):
-    # See comments above for POKE in how PEEK works. 
-    return memory[(location//WIDTH)][(location%WIDTH)]
-
-
-def gen_room_loc(RS, CS):
-    W = int(random()*9+2); L = int(random()*9+2)
-    R0=int(random()*(RS-L-1))+1; C0=int(random()*(CS-W-1))+1; P=40*R0+C0
-    return W, L, R0, C0, P
-
-
-def gen_dungeon(SZ, RS, CS):
+def gen_dungeon():
     # We return a list data structure that represents a map of 40 columns, 
     # 25 rows. The dungeon is generated inside this structure and serves
     # to feed what will be seen on the screen. In a sense, we'll have two 
     # structures - the full map, and then the map that the player reveals 
     # and what gets painted to the screen.
     # See "dungeon-memory-sim.py" for my notes on how this all worked in the
-    # original source, I've removed that from this code. 
-    mem = []
-    mem = init_map()
+    # original source. I've since "pythonized" the code to reflect the data
+    # structures I'm working with, instead of a memory<->screen mapping that 
+    # the original program worked with.
+    map = []
+    map = init_map()
 
-    retries = 0
-    rooms_generated = 0
-    # Keep generating rooms until we've hit a limit of DESIRED_RMS rooms or we've maxed out with 
-    # retries of so many times (RM_GEN_RETRIES) . 
-    while rooms_generated < DESIRED_RMS and retries < RM_GEN_RETRIES:
-        W, L, R0, C0, P = gen_room_loc(RS, CS)
+    # Create border around map
+    for x in range(0,WIDTH):
+        for y in range(0,HEIGHT):
+            if x==0 or y==0 or x==WIDTH-1 or y==HEIGHT-1:
+                map[x][y]=BORDER
 
-        # This was a check to see if the room in the data structure would go over
-        # the boundaries (end point) of the area of memory allocated. (TS+SZ)
-        if P+40*L+W >= SZ:
-            fail_on_size += 1
-            continue
-
-        # This looks to see if the room overlaps other rooms.
-        # I know the -1 looks strange, but the game should keep rooms at least 1
-        # space apart. Since I'm 0 index and BASIC was 1 indexed, this is how 
-        # it will work.
-        failed_check = False
-        for N in range(-1,(L+1)+1):
-            for N1 in range(-1, (W+1)+1):
-                if PEEK(mem, P+(N*40+N1)) != BLANK:
-                    failed_check = True
-                    break
-
-            if failed_check:
-                retries += 1
-                break
-
-        if not failed_check:
-            # We have a good room!
-            # This fills the room space.
-            rooms_generated += 1
-            for N in range(0,L+1):
-                for N1 in range(0, W+1):
-                    POKE(mem, P+(N*40+N1), FLOOR)
-
-            # Generate vertical passages from generated room down.
-            for N in range(P+42+(L*40), 999+1, 40):
-                if PEEK(mem,N) == FLOOR:
-                    for N1 in range(P+42, N+1, 40):
-                        POKE(mem, N1, FLOOR)
-                    # I think this used to be N1-80 because FOR NEXT in PET would increment, check
-                    # and leave the value at the incremented, which meant you'd have to back up
-                    # two rows. It seems that Python doesn't do that, so if I only back up 40, the
-                    # door symbol (in memory map, remember) is in the right spot.
-                    POKE(mem, N1-40, DOOR)
-                    break
-
-            # Generate horizontal passages from generated room right.
-            start = P+81+W; end = P+121+W 
-            for N in range(start, end+1):
-                if N/40 == int(N/40):
-                    break
-                
-                if PEEK(mem, N) == FLOOR:
-                    for N1 in range(P+81, (N-1)+1):
-                        POKE(mem, N1, FLOOR)
-                    POKE(mem, N1, DOOR)
-                    break
-
-            # Generate a monster in the room. Every room has a monster!
-            S = int(random()*L)+1; S1 = int(random()*W+1)
-            POKE(mem, P+S1+S*40, choice(MONSTERS))
+    generate_rooms(map)
 
     # Distribute 11 gold around the dungeon
     for N in range(1, NUM_HIDDEN_GOLD+1):
-        is_room = False
-        while not is_room:
-            U = int(random()*SZ)
-            is_room = (PEEK(mem,U) == FLOOR)
-        POKE(mem, U, GOLD)
+        is_floor = False
+        while not is_floor:
+            goldX = randint(1,WIDTH-1); goldY = randint(1,HEIGHT-1)
+            is_floor = (map[goldX][goldY]==FLOOR)
+        map[goldX][goldY]=GOLD
 
-    # Generate hard borders - player cannot cross these.
-    for R0 in range(0,RS+1):
-        POKE(mem, 40*R0, BORDER)
-        POKE(mem, 40*R0+CS, BORDER)
-
-    for C0 in range(0, CS+1):
-        POKE(mem, C0, BORDER)
-        POKE(mem, C0+40*RS, BORDER)
-
-    return mem
+    return map
 
 
 def what_is_seen(screen, game_state):
 
-    ## BUG ## - the view "wraps" if we're right next to the border. The border needs
-    # to stop the view
-    
     gold_near = False
 
     if game_state.see_more:
-        K=80; J=-2; R=3; game_state.see_more = False
+        distance = 2; game_state.see_more = False
     else:
-        K=40; J=-1; R=2
+        distance = 1
 
-    for N in range(K*-1, K+1, 40):    # col position - left, center, right
-        for N1 in range(J,R):       # row position - above, center, below
-            if N==0 and N1==0:      # if we're looking at our curr position...
-                continue            # ... then ignore. We know what's here!
-            Y=game_state.player_loc+N+N1
-            V=PEEK(game_state.dungeon_map, Y)
-            POKE(game_state.player_map, Y, V)
+    for x in range(distance*-1, distance+1):
+        for y in range(distance*-1, distance+1):
+            viewx = game_state.player_locX + x
+            viewy = game_state.player_locY + y
 
-            if V==DOOR or V==FLOOR or V==BORDER:
+            # If we're trying to view off map, or our current position, 
+            # continue on.
+            if viewx < 1 or viewy < 1 or \
+               viewx > 39 or viewy > 39 or (x==0 and y==0):
                 continue
-            if V==GOLD:
+
+            whats_here = game_state.dungeon_map[viewx][viewy]
+            game_state.player_map[viewx][viewy] = whats_here
+
+            if whats_here in (DOOR, FLOOR, BORDER):
+                continue
+            if whats_here==GOLD:
                 # We found gold! How much?
-                # See notes on source ln 680
                 game_state.gold_stash += 1+int(
                     (game_state.player_gold+1)*(random()))  
                 gold_near = True
                 # If we've not been near this gold, announce it.
                 if not game_state.found_gold:
                     message_update(screen, "Gold is near!")
-                
                 continue
-            if V in MONSTERS:
-                if V=="X":
+            if whats_here in MONSTERS:
+                if whats_here=="X":
                     game_state.monster_name="Spider"
                     game_state.monster_level=3
-                elif V=="G":
+                elif whats_here=="G":
                     game_state.monster_name="Grue"
                     game_state.monster_level=7
-                elif V=="D":
+                elif whats_here=="D":
                     game_state.monster_name="Dragon"
                     game_state.monster_level=1
-                elif V=="S":
+                elif whats_here=="S":
                     game_state.monster_name="Snake"
                     game_state.monster_level=2
-                elif V=="N":
+                elif whats_here=="N":
                     game_state.monster_name="Nuibus"
                     game_state.monster_level=9
-                elif V=="W":
+                elif whats_here=="W":
                     game_state.monster_name="Wyvern"
                     game_state.monster_level=5
 
-                game_state.active_monster = V
-                
-                POKE(game_state.dungeon_map, Y, FLOOR)
-
+                game_state.active_monster = whats_here
+                game_state.dungeon_map[viewx][viewy] = FLOOR
                 game_state.monster_delay = 0
 
                 # Monster HP based on our HP, experience and random
                 # We save the level for later if we defeat the monster, to 
                 # get XP from!
-                # It will change each time we see this monster. Heh.
+                # HP will change each time we see this monster. Heh.
                 game_state.monster_hp = game_state.monster_level = \
                     int(random()*game_state.player_HP + 
                      (game_state.player_experience/game_state.monster_level) + 
@@ -355,11 +315,12 @@ def what_is_seen(screen, game_state):
 
                 # If we've already revealed a monster, put it back on the
                 # dungeon map.
-                if game_state.monster_loc > 0:
-                    POKE(game_state.dungeon_map, game_state.monster_loc, 
-                         game_state.prev_monster)
+                if game_state.monster_locX > 0:
+                    game_state.dungeon_map[game_state.monster_locX][game_state.monster_locY] = \
+                        game_state.prev_monster
                 game_state.prev_monster = game_state.active_monster
-                game_state.monster_loc = Y
+                game_state.monster_locX = viewx
+                game_state.monster_locY = viewy
                 message_update(screen, "A {} with {} points is near!".format(
                     game_state.monster_name, game_state.monster_hp))
 
@@ -369,62 +330,43 @@ def what_is_seen(screen, game_state):
 
 
 def monster_move(screen, game_state):
-    move_adj = 0; move_dir = 0; monster_move = 0
+    pX, pY = game_state.player_locX, game_state.player_locY
+    mX, mY = game_state.monster_locX, game_state.monster_locY
+    dirX = 0; dirY = 0 
 
-    if abs(game_state.monster_loc + 40 - game_state.player_loc) < \
-        abs(game_state.monster_loc - game_state.player_loc):
-        move_adj = 40
+    if pX==mX and pY != mY:
+        if pY < mY:
+            dirY = -1
+        elif pY > mY:
+            dirY = 1
+    elif pY==mY and pX != mX:
+        if pX < mX:
+            dirX = -1
+        elif pX > mX:
+            dirX = 1
+    elif pX < mX and pY < mY:
+        dirX = -1; dirY = -1
+    elif pX < mX and pY > mY:
+        dirX = -1; dirY = 1
+    elif pX > mX and pY < mY:
+        dirX = 1; dirY = -1
+    elif pX > mX and pY > mY:
+        dirX = 1; dirY = 1
 
-    if abs(game_state.monster_loc - 40 - game_state.player_loc) < \
-        abs(game_state.monster_loc - game_state.player_loc):
-        move_adj = -40
-
-    target = PEEK(game_state.dungeon_map, game_state.monster_loc + move_adj)
-    if target==PLAYER or target==FLOOR or target==GOLD:
-        move_dir += move_adj
-
-    if abs(game_state.monster_loc - 1 - game_state.player_loc) < \
-        abs(game_state.monster_loc - game_state.player_loc):
-        move_adj = -1
-
-    if abs(game_state.monster_loc + 1 - game_state.player_loc) < \
-        abs(game_state.monster_loc - game_state.player_loc):
-        move_adj = 1
-
-    target = PEEK(game_state.dungeon_map, game_state.monster_loc + 
-                  move_dir + move_adj)
-    if target==PLAYER or target==FLOOR or target==GOLD:
-        move_dir += move_adj
-
-    
-    if game_state.monster_loc + move_dir < game_state.player_loc:
-      if move_dir==39:
-        move_dir=41
-      if move_dir==-41:
-        move_dir=-39
-    elif game_state.monster_loc + move_dir > game_state.player_loc:
-      if move_dir==41:
-        move_dir=39
-      if move_dir==-39:
-        move_dir=41
-
-    target = PEEK(game_state.dungeon_map, game_state.monster_loc+move_dir)
+    target = game_state.dungeon_map[mX+dirX][mY+dirY]
     
     # If we can't move into the target because there is something there that
     # we can't cross, then just stay put.
     if target == BLANK or target == BORDER or target==DOOR:
-        POKE(game_state.player_map,game_state.monster_loc,game_state.active_monster)
+        game_state.player_map[mX][mY] = game_state.active_monster
         return
 
-    POKE(game_state.player_map, game_state.monster_loc, 
-         game_state.monster_whats_here)
-
-    game_state.monster_loc += move_dir
-    game_state.monster_whats_here = PEEK(game_state.player_map, 
-                                         game_state.monster_loc)
-    POKE(game_state.player_map,game_state.monster_loc,
-         game_state.active_monster)
-    if game_state.monster_loc==game_state.player_loc:
+    game_state.player_map[mX][mY] = game_state.monster_whats_here
+    mX+=dirX; mY+=dirY
+    game_state.monster_whats_here = game_state.player_map[mX][mY]
+    game_state.player_map[mX][mY]=game_state.active_monster
+    game_state.monster_locX, game_state.monster_locY = mX, mY
+    if mX==pX and mY==pY:
         attack(screen, game_state)
 
 
@@ -479,17 +421,21 @@ def attack(screen, game_state):
 
 def remove_monster(game_state):
     game_state.whats_here = FLOOR
-    game_state.monster_loc = 0
+    game_state.monster_locX = 0
+    game_state.monster_locY = 0
     game_state.active_monster = ""
     game_state.monster_delay = 0
     game_state.monster_whats_here = FLOOR
 
-    POKE(game_state.player_map, game_state.player_loc, PLAYER)
+    game_state.player_map[game_state.player_locX][game_state.player_locY] = PLAYER
 
 
 def display_dungeon_map(screen, map, final=False):
-    for row in range(0, HEIGHT-2):
-        screen.addstr(row+2, 0, "".join(map[row]))
+    for row in range(0, HEIGHT):
+        rowstr = ""
+        for col in range(0,WIDTH):
+            rowstr += map[col][row]
+        screen.addstr(row+2, 0, rowstr)
         screen.refresh()
         if final:
             sleep(.5)
@@ -529,30 +475,25 @@ def main(screen):
         game = GameState()
 
         # Dungeon Map is the generated map
-        game.dungeon_map = gen_dungeon(game.SZ, game.RS, game.CS)
+        game.dungeon_map = gen_dungeon()
 
         # Player Map is what is displayed to the player as they navigate the dungeon
         game.player_map = init_map()
 
         good_location = False
         while not good_location:
-            game.player_loc = int(random()*game.SZ)
-            good_location = (PEEK(game.dungeon_map, game.player_loc) == FLOOR)
-    
-        game.whats_here = PEEK(game.dungeon_map, game.player_loc)
+            game.player_locX = randint(1,WIDTH-1) 
+            game.player_locY = randint(1,HEIGHT-1)
+            good_location = \
+                (game.dungeon_map[game.player_locX][game.player_locY]==FLOOR)
 
         # Determine/display what is visible
         what_is_seen(screen, game)
 
-        POKE(game.player_map, game.player_loc, PLAYER)
+        game.player_map[game.player_locX][game.player_locY]=PLAYER
         game.whats_here = FLOOR
 
         # Input/Move loop
-        # This is not set up like DUNGEON!
-        # Since (right now), Python doesn't accept keystrokes and respond to them
-        # immediately - it requires a return for input (I'm going to look into curses!)
-        # So the input/play loop is a little different. 
-        # I'm also not limiting input to 1 per second. 
         playing = True
         while playing:
             map_move = False
@@ -597,24 +538,23 @@ def main(screen):
                 break
 
             # If we're here, we're moving. Check to see if we're moving
-            # thru the spaces between rooms - if so, we need to be in shift
-            # mode. (not sure how I'm going to implement that.) Then, check
-            # to see if we're trying to move through an impassable order.
-            # In either case, go get player input again.
-            # See annotated source for how Q works, but it essentially 
-            # converts the player direction input into the number of 
-            # grid spaces (assume 40c x 25r screen) to move the player.
+            # thru the spaces between rooms and not in in shift-move
+            # mode. Then, check to see if we're trying to move through an 
+            # impassable border. In either case, go get player input again.
+            # Otherwise make the move.
             if map_move: 
-                Q = MOVEMAP[move]-41
-                if (PEEK(game.dungeon_map,game.player_loc+Q)==BLANK \
+                moveX,moveY = MOVEMAP[move]
+                locX,locY = game.player_locX,game.player_locY
+                if (game.dungeon_map[locX+moveX][locY+moveY]==BLANK \
                     and game.shift_mode!=1) or \
-                    (PEEK(game.dungeon_map,game.player_loc+Q)==BORDER):
+                    (game.dungeon_map[locX+moveX][locY+moveY]==BORDER):
                     continue
                 else:
-                    POKE(game.player_map,game.player_loc,game.whats_here)
-                    game.player_loc+=Q
-                    game.whats_here = PEEK(game.dungeon_map,game.player_loc)
-                    POKE(game.player_map,game.player_loc,PLAYER)
+                    game.player_map[locX][locY]=game.whats_here
+                    game.whats_here = game.dungeon_map[locX+moveX][locY+moveY]
+                    game.player_map[locX+moveX][locY+moveY]=PLAYER
+                    game.player_locX=locX+moveX
+                    game.player_locY=locY+moveY
 
                     # What do we see now as a result of the move?
                     what_is_seen(screen, game)
@@ -623,7 +563,7 @@ def main(screen):
                     if game.whats_here == GOLD:
                         game.player_gold+=game.gold_stash
                         message_update(screen, "You found {} gold pieces!".format(game.gold_stash))
-                        POKE(game.dungeon_map, game.player_loc, FLOOR)
+                        game.dungeon_map[game.player_locX][game.player_locY] = FLOOR
                         game.whats_here = FLOOR
                         game.hidden_gold -= 1
                         if game.hidden_gold == 0:
@@ -642,7 +582,7 @@ def main(screen):
                     # check its delay, if its delay is > 1, then
                     # it can move. This gives the player a chance
                     # to escape!
-                    if game.monster_loc > 0:
+                    if game.monster_locX > 0:
                         game.monster_delay += 1
                     if game.monster_delay > 1:
                         monster_move(screen, game)
@@ -665,7 +605,6 @@ def main(screen):
         playagain = get_input(screen, "Want to play again? ")
         if not playagain.startswith("y"):
             sys.exit(0)
-
 
 # Safely start/end curses windowing
 curses.wrapper(main)
