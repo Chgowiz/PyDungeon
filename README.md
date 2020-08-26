@@ -16,7 +16,21 @@ I'm attempting to recreate the game based on the source code, implemented in Pyt
 
 The source code from the original game is in the repo, and my comments on both an annotated copy of the source and the Python code should hopefully give some insights into what Messr. Sawyer had to do in order to implement this game on the old PET! I hope you enjoy this as much as I do.
 
-To run: python3 ./pydungeon.py
+## Prerequisites
+
+### Unix (Linux, OS X)
+
+The game should run out of the box. Just run the game as described below.
+
+### Windows
+
+- [Python 3](https://www.python.org/) is needed
+- The Curses library for windows is needed. Run `pip install -r requirements-win.txt` once before the first start of the game.
+
+## To run:
+
+- Under Unix: `python3 ./pydungeon.py`
+- Under Windows should be `.\pydungeon.py` enough
 
 |CBM PET DUNGEON|PyDungeon (dungeon memory map dump)|
 :--------------:|:-----------------:
