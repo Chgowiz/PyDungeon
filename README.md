@@ -1,6 +1,6 @@
 # PyDungeon
 
-UPDATE: 6/5/20 - With this last checkin and merge to master branch, I've achieved all my goals. 
+UPDATE: 6/5/20 - With this last checkin and merge to master branch, I've achieved all my goals.
 - understanding the 1979 Commodore BASIC code
 - implemented (mostly) as-is in Python
 - improve code to more modern approach
@@ -10,7 +10,7 @@ If I started to do more, like add more features, I might as well make a rogue cl
 
 ------
 
-This is a project to recreate DUNGEON - a graphical dungeon crawler developed by Brian Sawyer for Cursor Magazine, issue #15. It was my very first computer D&D game, at a time when I had just started reading and playing the tabletop roleplaying game. DUNGEON was an eye-opener to me at the time (1979/1980). 
+This is a project to recreate DUNGEON - a graphical dungeon crawler developed by Brian Sawyer for Cursor Magazine, issue #15. It was my very first computer D&D game, at a time when I had just started reading and playing the tabletop roleplaying game. DUNGEON was an eye-opener to me at the time (1979/1980).
 
 I'm attempting to recreate the game based on the source code, implemented in Python. Obviously, some things will be very different - the Commodore PET implemented a crude, but effective graphics mode which DUNGEON took advantage of. No such luck in console-based Python! I have vague dreams of figuring out the basic algorithms and then implementing using something a bit more graphical. We'll see..
 
@@ -34,4 +34,4 @@ The game should run out of the box. Just run the game as described below.
 
 |CBM PET DUNGEON|PyDungeon (dungeon memory map dump)|
 :--------------:|:-----------------:
-<img src="https://pbs.twimg.com/media/EZUIm_7WAAA0QpL?format=png&name=900x900" width=400>|<img src="https://pbs.twimg.com/media/EZUIcPkWoAMG0nK?format=png&name=900x900" height=400>
+<img src="images/EZUIm_7WAAA0QpL.png" width=400>|<img src="images/EZUIcPkWoAMG0nK.png" height=400>
